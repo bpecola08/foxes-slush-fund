@@ -37,20 +37,27 @@ function errMsg(err) {
   return (err && err.message) || 'Something went wrong';
 }
 
-// Split a family label ("Trish Adair & Brandon Pecola", "Lauren & Chris Boyle")
-// into the individual people in that family who can place a bet. A first
-// name with no last name inherits the family's shared last name.
-function familyMembers(label) {
-  if (!label) return [];
-  const parts = String(label).split(/\s*&\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean);
+// The people in a family who can place a bet: the parents, from the
+// family's full names ("Trish Adair & Brandon Pecola"), plus "Grandparents"
+// when the family label includes them. A first name with no last name
+// inherits the family's shared last name ("Lauren & Chris Boyle" ->
+// "Lauren Boyle", "Chris Boyle").
+function familyMembers(wallet) {
+  if (!wallet) return [];
+  const parts = String(wallet.family || '')
+    .split(/\s*&\s*|\s+and\s+/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
   const lastNames = parts.map((p) => {
     const words = p.split(/\s+/);
     return words.length > 1 ? words[words.length - 1] : '';
   });
   const shared = lastNames.find((n) => n) || '';
-  return parts.map((p) =>
+  const out = parts.map((p) =>
     p.split(/\s+/).length > 1 || !shared ? p : `${p} ${shared}`
   );
+  if (/grandparents/i.test(String(wallet.familyLabel || ''))) out.push('Grandparents');
+  return out;
 }
 
 function PayoutBadge({ disposition }) {
@@ -576,7 +583,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
   const [bettor, setBettor] = useState('');
   const [otherName, setOtherName] = useState('');
 
-  const members = wallet ? familyMembers(wallet.familyLabel) : [];
+  const members = wallet ? familyMembers(wallet) : [];
 
   const pickBettor = (name) => {
     setBettor(name);
@@ -591,7 +598,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
     setLastTicket(null);
     setOtherName('');
     // A one-person family bets as that person automatically.
-    const m = familyMembers(w.familyLabel);
+    const m = familyMembers(w);
     setBettor(m.length === 1 ? m[0] : '');
     flash(`Welcome, ${w.family}!`);
   };
