@@ -93,7 +93,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
         <span className="muted">{ticket.familyLabel}</span>
         <span className="muted small">{ticket.mode === 'physical' ? '🪙 real chip' : '🎲 virtual'}</span>
         {ticket.payLater && <span className="badge warn">Play now pay later</span>}
-        <span className="price">{money(ticket.paidCents)}</span>
+        <span className="price">Ticket {money(ticket.paidCents)}</span>
       </div>
       <div className="picks">
         {CATEGORIES.map(({ key, label }) => {
@@ -117,7 +117,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
             return (
               <div key={key} className="payout-row">
                 <span>
-                  {label}: won {money(w.payoutCents)} <PayoutBadge disposition={w.disposition} />
+                  {label}: <strong>you owe them {money(w.payoutCents)}</strong> <PayoutBadge disposition={w.disposition} />
                 </span>
                 {onPayout && (
                   <span className="payout-btns">
@@ -378,6 +378,16 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     const res = game.resolutions?.[key];
     return res ? res.winners.filter((w) => w.disposition === 'unmarked') : [];
   });
+
+  // Every winner across all resolved categories, for the "Who to pay"
+  // summary: who won, what they won, and how much to hand them.
+  const allWinners = CATEGORIES.flatMap(({ key, label }) => {
+    const res = game.resolutions?.[key];
+    return res ? res.winners.map((w) => ({ ...w, category: key, categoryLabel: label })) : [];
+  });
+  const totalOwedCents = allWinners
+    .filter((w) => w.disposition === 'unmarked')
+    .reduce((sum, w) => sum + (w.payoutCents || 0), 0);
 
   const saveDetails = async () => {
     await run(async () => {
@@ -677,6 +687,22 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           })}
 
           <h3>Winners &amp; payouts</h3>
+          {allWinners.length > 0 && (
+            <div className="card payout-summary">
+              <h3>Who to pay</h3>
+              {allWinners.map((w, i) => (
+                <div key={`${w.category}-${w.ticketId}-${i}`} className="payout-summary-row">
+                  <span><strong>{w.buyer}</strong> — {w.categoryLabel}</span>
+                  <span><strong>{money(w.payoutCents)}</strong> <PayoutBadge disposition={w.disposition} /></span>
+                </div>
+              ))}
+              <div className="payout-summary-total">
+                <span>Total to pay out</span>
+                <strong>{money(totalOwedCents)}</strong>
+              </div>
+              {totalOwedCents === 0 && <p className="muted small">Everyone is settled — nothing left to hand out.</p>}
+            </div>
+          )}
           {(game.tickets || []).map((t) => (
             <TicketCard key={t.id} ticket={t} game={game} showPayouts onPayout={payout} />
           ))}
