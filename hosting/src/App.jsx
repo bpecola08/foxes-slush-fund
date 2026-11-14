@@ -37,6 +37,22 @@ function errMsg(err) {
   return (err && err.message) || 'Something went wrong';
 }
 
+// Split a family label ("Trish Adair & Brandon Pecola", "Lauren & Chris Boyle")
+// into the individual people in that family who can place a bet. A first
+// name with no last name inherits the family's shared last name.
+function familyMembers(label) {
+  if (!label) return [];
+  const parts = String(label).split(/\s*&\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean);
+  const lastNames = parts.map((p) => {
+    const words = p.split(/\s+/);
+    return words.length > 1 ? words[words.length - 1] : '';
+  });
+  const shared = lastNames.find((n) => n) || '';
+  return parts.map((p) =>
+    p.split(/\s+/).length > 1 || !shared ? p : `${p} ${shared}`
+  );
+}
+
 function PayoutBadge({ disposition }) {
   if (disposition === 'paid') return <span className="badge paid">Paid</span>;
   if (disposition === 'rolled') return <span className="badge rolled">Rolled to account</span>;
@@ -52,7 +68,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
   return (
     <div className="ticket">
       <div className="ticket-head">
-        <strong>{ticket.buyer}</strong>
+        <strong>{ticket.bettor || ticket.buyer}</strong>
         <span className="muted">{ticket.familyLabel}</span>
         <span className="price">{money(ticket.paidCents)}</span>
       </div>
@@ -557,12 +573,26 @@ function ParentPortal({ game, wallets, flash, fail }) {
   const [selected, setSelected] = useState({ firstGoal: null, firstPenalty: null, playmaker: null });
   const [busy, setBusy] = useState(false);
   const [lastTicket, setLastTicket] = useState(null);
+  const [bettor, setBettor] = useState('');
+  const [otherName, setOtherName] = useState('');
+
+  const members = wallet ? familyMembers(wallet.familyLabel) : [];
+
+  const pickBettor = (name) => {
+    setBettor(name);
+    setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
+    setLastTicket(null);
+  };
 
   const login = () => {
     const w = wallets.find((x) => x.codes && x.codes.includes(parseInt(pin, 10)));
     if (!w) return fail(new Error('No wallet found for that jersey number. Try again.'));
     setWallet(w);
     setLastTicket(null);
+    setOtherName('');
+    // A one-person family bets as that person automatically.
+    const m = familyMembers(w.familyLabel);
+    setBettor(m.length === 1 ? m[0] : '');
     flash(`Welcome, ${w.family}!`);
   };
 
@@ -574,18 +604,20 @@ function ParentPortal({ game, wallets, flash, fail }) {
     }
   }, [wallets]);
 
-  const myTicket = game?.tickets?.find((t) => t.familyId === wallet?.familyId);
+  const familyTickets = (game?.tickets || []).filter((t) => t.familyId === wallet?.familyId);
+  const myTicket = familyTickets.find((t) => (t.bettor || t.buyer) === bettor);
 
   const buy = async () => {
+    if (!bettor) return fail(new Error('Pick who is betting first.'));
     const picks = { ...selected };
     const count = CATEGORIES.filter((c) => picks[c.key] !== null).length;
     if (count === 0) return fail(new Error('Tap one card in at least one category first.'));
     setBusy(true);
     try {
-      const { ticket } = (await api.buyTicket(wallet.familyId, wallet.family, picks)).data;
+      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks)).data;
       setLastTicket(ticket);
       setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
-      flash(`Ticket bought — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
+      flash(`Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
     } catch (e) {
       fail(e);
     } finally {
@@ -626,15 +658,39 @@ function ParentPortal({ game, wallets, flash, fail }) {
         {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} · Goalie #{game.startingGoalie}
       </p>
 
-      {myTicket || lastTicket ? (
+      <h3>Who&apos;s betting?</h3>
+      <div className="row">
+        {members.map((m) => (
+          <button key={m} className={bettor === m ? 'primary' : ''} onClick={() => pickBettor(m)}>{m}</button>
+        ))}
+      </div>
+      <label>
+        Someone else{' '}
+        <input type="text" placeholder="Type their name" value={otherName} onChange={(e) => setOtherName(e.target.value)} />
+        <button onClick={() => {
+          const n = otherName.trim();
+          if (!n) return fail(new Error('Type a name first'));
+          pickBettor(n);
+          setOtherName('');
+        }}>Use this name</button>
+      </label>
+      {familyTickets.length > 0 && (
+        <p className="muted small">
+          Bets from this family: {familyTickets.map((t) => t.bettor || t.buyer).join(', ')}
+        </p>
+      )}
+
+      {!bettor ? (
+        <p className="muted">Pick who&apos;s betting above to draft your picks.</p>
+      ) : myTicket || lastTicket ? (
         <div>
-          <h3>Your ticket</h3>
+          <h3>{bettor}&apos;s ticket</h3>
           <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} />
-          <p className="muted small">One ticket per family per game.</p>
+          <p className="muted small">One ticket per person per game — tap another name above to buy for someone else in the family.</p>
         </div>
       ) : (
         <div>
-          <h3>Draft your picks — tap one face-down card per category</h3>
+          <h3>Draft {bettor}&apos;s picks — tap one face-down card per category</h3>
           <p className="muted small">$2 per category ($1 to the pot, $1 to the slush). The cards are shuffled — you won’t know who you drew until you buy.</p>
           {CATEGORIES.map(({ key, label }) => {
             const count = game.deckCounts?.[key] ?? 0;
@@ -651,14 +707,22 @@ function ParentPortal({ game, wallets, flash, fail }) {
                       ?
                     </button>
                   ))}
-                  {count === 0 && <span className="muted">All cards drawn.</span>}
+                  {count === 0 && (
+                    <span>
+                      <button
+                        className={`card-back ${selected[key] === -1 ? 'picked' : ''}`}
+                        onClick={() => setSelected({ ...selected, [key]: selected[key] === -1 ? null : -1 })}
+                      >?</button>
+                      <span className="muted small"> Deck is out — draws any player.</span>
+                    </span>
+                  )}
                 </div>
               </div>
             );
           })}
           <p>
             <button className="primary" onClick={buy} disabled={busy || selectedCount === 0}>
-              Buy ticket — ${price}.00
+              Buy ticket for {bettor} — ${price}.00
             </button>
           </p>
           {wallet.balanceCents < price * 100 && (
@@ -666,7 +730,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
           )}
         </div>
       )}
-      <button className="ghost" onClick={() => setWallet(null)}>Switch family</button>
+      <button className="ghost" onClick={() => { setWallet(null); setBettor(''); setOtherName(''); }}>Switch family</button>
     </div>
   );
 }
@@ -771,7 +835,7 @@ function GameLogPage({ log }) {
                 {(entry.tickets || []).map((t) => (
                   <div key={t.id} className="ticket">
                     <div className="ticket-head">
-                      <strong>{t.buyer}</strong>
+                      <strong>{t.bettor || t.buyer}</strong>
                       <span className="muted">{t.familyLabel}</span>
                       <span className="price">{money(t.paidCents)}</span>
                     </div>
