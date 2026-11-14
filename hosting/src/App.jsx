@@ -395,6 +395,18 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  // One-tap cash deposit for when a parent hands you $6 at the rink (one full
+  // ticket). Confirms the family first, since there is no undo for a deposit.
+  const quickDeposit = async (familyId) => {
+    const w = wallets.find((x) => x.familyId === familyId);
+    if (!w) return;
+    if (!window.confirm(`Add $6.00 cash to ${w.familyLabel}?`)) return;
+    await run(async () => {
+      await api.deposit(familyId, 600);
+      flash(`Deposited $6.00 cash to ${w.familyLabel}.`);
+    });
+  };
+
   const resolve = async (key) => {
     const num = parseInt(resolvePick[key], 10);
     if (!num) return fail(new Error('Pick a player first'));
@@ -539,9 +551,13 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         </div>
         <div className="wallet-grid">
           {wallets.map((w) => (
-            <div key={w.familyId} className="wallet-chip">{w.familyLabel}: <strong>{money(w.balanceCents)}</strong></div>
+            <div key={w.familyId} className="wallet-chip">
+              {w.familyLabel}: <strong>{money(w.balanceCents)}</strong>{' '}
+              <button className="ghost" onClick={() => quickDeposit(w.familyId)} disabled={busy}>+$6 cash</button>
+            </div>
           ))}
         </div>
+        <p className="muted small">Quick cash: tap +$6 cash next to a family when they hand you $6 at the rink. Use the form above for any other amount.</p>
       </div>
 
       {game.phase === 'open' && (
