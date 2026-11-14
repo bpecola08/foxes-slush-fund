@@ -301,6 +301,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
   // Bank manager
   const [depFamily, setDepFamily] = useState('');
   const [depAmount, setDepAmount] = useState('');
+  const [quickAmounts, setQuickAmounts] = useState({});
 
   // Resolve
   const [resolvePick, setResolvePick] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
@@ -395,16 +396,31 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
-  // One-tap cash deposit for when a parent hands you $6 at the rink (one full
-  // ticket). Confirms the family first, since there is no undo for a deposit.
-  const quickDeposit = async (familyId) => {
+  // One-tap cash deposit for when a parent hands you cash at the rink.
+  // Confirms the family first, since there is no undo for a deposit.
+  const quickDeposit = async (familyId, dollars) => {
     const w = wallets.find((x) => x.familyId === familyId);
     if (!w) return;
-    if (!window.confirm(`Add $6.00 cash to ${w.familyLabel}?`)) return;
+    if (!window.confirm(`Add $${dollars.toFixed(2)} cash to ${w.familyLabel}?`)) return;
     await run(async () => {
-      await api.deposit(familyId, 600);
-      flash(`Deposited $6.00 cash to ${w.familyLabel}.`);
+      await api.deposit(familyId, Math.round(dollars * 100));
+      flash(`Deposited $${dollars.toFixed(2)} cash to ${w.familyLabel}.`);
     });
+  };
+
+  const quickDepositCustom = async (familyId) => {
+    const w = wallets.find((x) => x.familyId === familyId);
+    if (!w) return;
+    const dollars = parseFloat(quickAmounts[familyId]);
+    if (Number.isNaN(dollars) || dollars <= 0) return fail(new Error('Enter an amount over $0'));
+    if (!window.confirm(`Add $${dollars.toFixed(2)} cash to ${w.familyLabel}?`)) return;
+    let ok = false;
+    await run(async () => {
+      await api.deposit(familyId, Math.round(dollars * 100));
+      ok = true;
+      flash(`Deposited $${dollars.toFixed(2)} cash to ${w.familyLabel}.`);
+    });
+    if (ok) setQuickAmounts((prev) => ({ ...prev, [familyId]: '' }));
   };
 
   const resolve = async (key) => {
@@ -553,11 +569,20 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           {wallets.map((w) => (
             <div key={w.familyId} className="wallet-chip">
               {w.familyLabel}: <strong>{money(w.balanceCents)}</strong>{' '}
-              <button className="ghost" onClick={() => quickDeposit(w.familyId)} disabled={busy}>+$6 cash</button>
+              <button className="ghost" onClick={() => quickDeposit(w.familyId, 6)} disabled={busy}>+$6</button>{' '}
+              <button className="ghost" onClick={() => quickDeposit(w.familyId, 10)} disabled={busy}>+$10</button>{' '}
+              <button className="ghost" onClick={() => quickDeposit(w.familyId, 20)} disabled={busy}>+$20</button>{' '}
+              <input
+                type="number" min="0" step="0.01" placeholder="$" aria-label={`Custom cash amount for ${w.familyLabel}`}
+                value={quickAmounts[w.familyId] || ''}
+                onChange={(e) => setQuickAmounts((prev) => ({ ...prev, [w.familyId]: e.target.value }))}
+                className="quick-amount"
+              />
+              <button className="ghost" onClick={() => quickDepositCustom(w.familyId)} disabled={busy}>Add</button>
             </div>
           ))}
         </div>
-        <p className="muted small">Quick cash: tap +$6 cash next to a family when they hand you $6 at the rink. Use the form above for any other amount.</p>
+        <p className="muted small">Quick cash: tap +$6, +$10, or +$20 next to a family when they hand you cash at the rink, or type any amount in the $ box and tap Add. Use the form above for a deposit without the quick buttons.</p>
       </div>
 
       {game.phase === 'open' && (
