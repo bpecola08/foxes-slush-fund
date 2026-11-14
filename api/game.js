@@ -1,8 +1,9 @@
 // POST /api/game — { password, action, ... }.
 // Password-gated organizer endpoint for setting up the next game.
-// action: 'setInfo' | 'setCarryover' | 'open'.
+// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'open'.
 //   setInfo:      { gameDate, opponent } -> { game }
 //   setCarryover: { category, amountCents } -> { game }
+//   setDrawMode:  { drawMode } -> { game }   ('mixed' | 'virtual' | 'physical')
 //   open:         { gameDate, opponent, startingGoalie } -> { game }
 const { handler } = require('./_lib/http');
 const db = require('./_lib/db');
@@ -24,6 +25,13 @@ module.exports = handler(async (body) => {
   if (action === 'setCarryover') {
     const game = await db.withState((state) => {
       const g = logic.setCarryover(state, body.category, body.amountCents);
+      return { result: g };
+    });
+    return { game };
+  }
+  if (action === 'setDrawMode') {
+    const game = await db.withState((state) => {
+      const g = logic.setDrawMode(state, body.drawMode);
       return { result: g };
     });
     return { game };
