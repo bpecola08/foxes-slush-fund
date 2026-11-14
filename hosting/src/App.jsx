@@ -215,8 +215,14 @@ export default function App() {
 function Landing({ game, log, onGo, onInit }) {
   const potFor = (key) =>
     (game?.phase === 'open' || game?.phase === 'closed' ? game.pots?.[key] : game?.carryover?.[key]) || 0;
+  // "Running total" = everything collected this season: what is owed to
+  // Amanda right now plus what has already been sent to her. Paying Amanda
+  // zeroes the amount owed, but it must NOT zero the season total.
+  const paidCents = game
+    ? (game.slushPayments || []).reduce((sum, p) => sum + (p.amountCents || 0), 0)
+    : 0;
   const seasonSlush = game
-    ? game.slushCents || 0
+    ? (game.slushCents || 0) + paidCents
     : log && log[0]
       ? log[0].slushSeasonCents || 0
       : 0;
