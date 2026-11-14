@@ -234,11 +234,24 @@ function Landing({ game, log, onGo, onInit }) {
       )}
       <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
       <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
-      <button className="organizer-hero" onClick={() => onGo('organizer')}>Organizer Page</button>
-      <div className="menu">
-        <button onClick={() => onGo('board')}>All Picks &amp; Winners</button>
-        <button onClick={() => onGo('gamelog')}>Game Log</button>
-      </div>
+      <button className="nav-hero" onClick={() => onGo('board')}>All Picks &amp; Winners</button>
+      <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
+      {log && log.length > 0 && (
+        <div>
+          <h3>Past games — winners &amp; slush</h3>
+          {log.map((entry) => (
+            <div key={entry.id} className="pot">
+              <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)}
+              {CATEGORIES.map(({ key, label }) => (
+                <div key={key}>
+                  <strong>{label}</strong>: {money(entry.pots?.[key] || 0)} · Winner: {winnerText(entry.resolutions?.[key])}
+                </div>
+              ))}
+              <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>
+            </div>
+          ))}
+        </div>
+      )}
       {game && (
         <div>
           <h3>Pots{game.phase === 'open' ? ' — this game' : ' — next game (starting amounts)'}</h3>
@@ -257,22 +270,7 @@ function Landing({ game, log, onGo, onInit }) {
           )}
         </div>
       )}
-      {log && log.length > 0 && (
-        <div>
-          <h3>Past games — winners &amp; slush</h3>
-          {log.map((entry) => (
-            <div key={entry.id} className="pot">
-              <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)}
-              {CATEGORIES.map(({ key, label }) => (
-                <div key={key}>
-                  <strong>{label}</strong>: {money(entry.pots?.[key] || 0)} · Winner: {winnerText(entry.resolutions?.[key])}
-                </div>
-              ))}
-              <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>
-            </div>
-          ))}
-        </div>
-      )}
+      <button className="nav-hero" onClick={() => onGo('organizer')}>Organizer Page</button>
       {!game && (
         <p>
           <button className="ghost" onClick={onInit}>Seed the app (organizer)</button>
