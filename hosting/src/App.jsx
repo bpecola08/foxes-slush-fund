@@ -224,6 +224,7 @@ export default function App() {
       {view === 'parent' && <ParentPortal game={game} wallets={walletList} flash={flash} fail={fail} />}
       {view === 'board' && <Board game={game} flash={flash} fail={fail} />}
       {view === 'gamelog' && <GameLogPage log={log} />}
+      {view === 'season' && <SeasonPage game={game} log={log} wallets={walletList} />}
     </div>
   );
 }
@@ -297,6 +298,7 @@ function Landing({ game, log, onGo, onInit }) {
           : 'Picks & winners'}
       </button>
       <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
+      <button className="nav-hero" onClick={() => onGo('season')}>🏆 Season standings</button>
       {log && log.length > 0 && (
         <div>
           <h3>Past games — winners &amp; slush</h3>
@@ -1291,6 +1293,143 @@ function GameLogPage({ log }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+// Season standings: totals across every game in the Game Log plus the
+// game in progress (if one is open). All of it is added up here in the
+// browser from the same game / log / wallet data the rest of the app
+// already loads — nothing extra is stored.
+function SeasonPage({ game, log, wallets }) {
+  const inProgress = game && (game.phase === 'open' || game.phase === 'closed');
+  const sources = [];
+  if (inProgress) sources.push({ tickets: game.tickets || [], resolutions: game.resolutions || {} });
+  for (const entry of log || []) {
+    sources.push({ tickets: entry.tickets || [], resolutions: entry.resolutions || {} });
+  }
+  const gamesCount = sources.length;
+
+  const fam = new Map(); // familyId -> totals
+  const people = new Map(); // familyId|buyer -> totals
+  const ensureFam = (familyId, familyLabel) => {
+    const key = String(familyId);
+    if (!fam.has(key)) {
+      fam.set(key, { familyId: key, familyLabel: familyLabel || '', plays: 0, spentCents: 0, wonCents: 0, wins: 0 });
+    }
+    const f = fam.get(key);
+    if (familyLabel && !f.familyLabel) f.familyLabel = familyLabel;
+    return f;
+  };
+  const ensurePerson = (familyId, buyer, familyLabel) => {
+    const key = `${familyId}|${buyer}`;
+    if (!people.has(key)) {
+      people.set(key, { key, familyId: String(familyId), buyer, familyLabel: familyLabel || '', plays: 0, spentCents: 0, wonCents: 0, wins: 0 });
+    }
+    return people.get(key);
+  };
+
+  for (const src of sources) {
+    const byTicket = new Map((src.tickets || []).map((t) => [t.id, t]));
+    for (const t of src.tickets || []) {
+      const f = ensureFam(t.familyId, t.familyLabel || t.family);
+      f.plays += 1;
+      f.spentCents += t.paidCents || 0;
+      const p = ensurePerson(t.familyId, t.bettor || t.buyer, t.familyLabel || t.family);
+      p.plays += 1;
+      p.spentCents += t.paidCents || 0;
+    }
+    for (const { key } of CATEGORIES) {
+      const res = src.resolutions ? src.resolutions[key] : null;
+      if (!res) continue;
+      for (const w of res.winners || []) {
+        const t = byTicket.get(w.ticketId);
+        const f = ensureFam(w.familyId, t?.familyLabel || w.family);
+        f.wonCents += w.payoutCents || 0;
+        f.wins += 1;
+        const p = ensurePerson(w.familyId, w.buyer, t?.familyLabel || w.family);
+        p.wonCents += w.payoutCents || 0;
+        p.wins += 1;
+      }
+    }
+  }
+
+  const walletById = new Map((wallets || []).map((w) => [String(w.familyId), w.balanceCents]));
+  const owing = (wallets || [])
+    .filter((w) => (w.balanceCents || 0) < 0)
+    .sort((a, b) => a.balanceCents - b.balanceCents);
+  const topPeople = [...people.values()]
+    .filter((p) => p.wins > 0)
+    .sort((a, b) => b.wonCents - a.wonCents || b.wins - a.wins || a.buyer.localeCompare(b.buyer));
+  const families = [...fam.values()]
+    .filter((f) => f.plays > 0 || f.wins > 0)
+    .sort((a, b) => b.wonCents - a.wonCents || (b.wonCents - b.spentCents) - (a.wonCents - a.spentCents) || a.familyLabel.localeCompare(b.familyLabel));
+  const signed = (c) => (c < 0 ? `-${money(-c)}` : money(c));
+
+  return (
+    <div className="card">
+      <h2>🏆 Season standings</h2>
+      <p className="muted small">
+        {gamesCount === 0
+          ? 'No games yet — standings appear after the first game.'
+          : `Added up from ${gamesCount} game${gamesCount === 1 ? '' : 's'}${inProgress ? ', including the game in progress' : ''}.`}
+      </p>
+
+      <h3>Who owes</h3>
+      {owing.length === 0 ? (
+        <p className="muted">Nobody owes anything — every wallet is square. 🎉</p>
+      ) : (
+        owing.map((w) => (
+          <div key={w.familyId} className="pick-row">
+            <span>{w.familyLabel}</span>
+            <span className="negative"><strong>owes {money(-(w.balanceCents || 0))}</strong></span>
+          </div>
+        ))
+      )}
+
+      <h3>Top winners — by person</h3>
+      {topPeople.length === 0 ? (
+        <p className="muted">No winners yet.</p>
+      ) : (
+        topPeople.map((p, i) => (
+          <div key={p.key} className="pick-row">
+            <span>{i + 1}. <strong>{fullName(p.buyer, p.familyId)}</strong> <span className="muted">({p.familyLabel})</span></span>
+            <span>{p.wins} win{p.wins === 1 ? '' : 's'} · <strong>{money(p.wonCents)}</strong></span>
+          </div>
+        ))
+      )}
+
+      <h3>Family totals</h3>
+      {families.length === 0 ? (
+        <p className="muted">No plays yet.</p>
+      ) : (
+        families.map((f) => {
+          const bal = walletById.get(f.familyId);
+          const net = f.wonCents - f.spentCents;
+          return (
+            <div key={f.familyId} className="pick-row">
+              <span>
+                <strong>{f.familyLabel}</strong>
+                <br />
+                <span className="muted small">{f.plays} play{f.plays === 1 ? '' : 's'} · spent {money(f.spentCents)} · won {money(f.wonCents)}</span>
+              </span>
+              <span>
+                Net <strong className={net < 0 ? 'negative' : ''}>{signed(net)}</strong>
+                <br />
+                <span className="muted small">
+                  {bal === undefined
+                    ? 'Wallet —'
+                    : bal < 0
+                      ? <span className="negative">Wallet owes {money(-bal)}</span>
+                      : `Wallet ${money(bal)}`}
+                </span>
+              </span>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
