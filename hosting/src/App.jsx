@@ -199,7 +199,7 @@ export default function App() {
 
 function Landing({ game, log, onGo, onInit }) {
   const potFor = (key) =>
-    (game?.phase === 'open' ? game.pots?.[key] : game?.carryover?.[key]) || 0;
+    (game?.phase === 'open' || game?.phase === 'closed' ? game.pots?.[key] : game?.carryover?.[key]) || 0;
   const seasonSlush = game
     ? game.slushCents || 0
     : log && log[0]
@@ -218,10 +218,11 @@ function Landing({ game, log, onGo, onInit }) {
       <h2>Welcome</h2>
       {game ? (
         <p>
-          {game.phase === 'open' ? (
+          {game.phase === 'open' || game.phase === 'closed' ? (
             <>
               📅 {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} ·{' '}
               <strong>{game.tickets?.length || 0} tickets sold</strong>
+              {game.phase === 'closed' ? ' · Draft closed — game in progress' : ''}
             </>
           ) : (
             <>No game open yet — the draft hasn&apos;t started.</>
@@ -254,18 +255,18 @@ function Landing({ game, log, onGo, onInit }) {
       )}
       {game && (
         <div>
-          <h3>Pots{game.phase === 'open' ? ' — this game' : ' — next game (starting amounts)'}</h3>
+          <h3>Pots{(game.phase === 'open' || game.phase === 'closed') ? ' — this game' : ' — next game (starting amounts)'}</h3>
           <div className="pots">
             {CATEGORIES.map(({ key, label }) => (
               <div key={key} className="pot">
                 <strong>{label}</strong>: {money(potFor(key))}
-                {game.phase === 'open' && (
+                {(game.phase === 'open' || game.phase === 'closed') && (
                   <span> · Winner: {winnerText(game.resolutions?.[key])}</span>
                 )}
               </div>
             ))}
           </div>
-          {game.phase === 'open' && (
+          {(game.phase === 'open' || game.phase === 'closed') && (
             <p>Slush from this game: <strong>{money(game.slushGameCents || 0)}</strong></p>
           )}
         </div>
@@ -386,6 +387,22 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  // Close the draft once the real game starts — no more tickets, but the
+  // game can still be resolved after it ends.
+  const closeDraft = async () => {
+    await run(async () => {
+      await api.closeDraft();
+      flash('Draft closed — the game has started. No more tickets.');
+    });
+  };
+
+  const reopenDraft = async () => {
+    await run(async () => {
+      await api.reopenDraft();
+      flash('Draft reopened — parents can buy tickets again.');
+    });
+  };
+
   const deposit = async () => {
     const dollars = parseFloat(depAmount);
     if (!depFamily || Number.isNaN(dollars) || dollars <= 0) return fail(new Error('Pick a family and enter an amount over $0'));
@@ -494,7 +511,9 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         <p className="muted">
           {game.phase === 'open'
             ? `Game open: ${fmtDate(game.gameDate)} · Foxes vs ${game.opponent || 'TBD'} · Goalie #${game.startingGoalie}`
-            : 'No game open — set up the next game below.'}{' '}
+            : game.phase === 'closed'
+              ? `Draft closed — game in progress: ${fmtDate(game.gameDate)} · Foxes vs ${game.opponent || 'TBD'} · Goalie #${game.startingGoalie}`
+              : 'No game open — set up the next game below.'}{' '}
           Season slush owed to Amanda: <strong>{money(game.slushCents)}</strong>
         </p>
         <button className="ghost" onClick={() => { clearOrganizerPassword(); window.location.reload(); }}>Sign out</button>
@@ -532,6 +551,17 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           <label>Date <input type="date" value={gameDate} onChange={(e) => setGameDate(e.target.value)} /></label>
           <label>Opponent <input type="text" value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
+          <h3>Close the draft</h3>
+          <p className="muted small">Once the real game starts, close the draft so no more tickets can be bought. You can still resolve the game after it ends.</p>
+          <button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button>
+        </div>
+      )}
+
+      {game.phase === 'closed' && (
+        <div className="card">
+          <h2>Draft closed — game in progress</h2>
+          <p className="muted">No more tickets can be bought. Resolve the game below once it ends, or reopen the draft if you closed it early.</p>
+          <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button>
         </div>
       )}
 
@@ -585,7 +615,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         <p className="muted small">Quick cash: tap +$6, +$10, or +$20 next to a family when they hand you cash at the rink, or type any amount in the $ box and tap Add. Use the form above for a deposit without the quick buttons.</p>
       </div>
 
-      {game.phase === 'open' && (
+      {(game.phase === 'open' || game.phase === 'closed') && (
         <div className="card">
           <h2>Resolve the game</h2>
           {CATEGORIES.map(({ key, label }) => {
@@ -777,7 +807,11 @@ function ParentPortal({ game, wallets, flash, fail }) {
       <div className="card">
         <h2>{wallet.familyLabel}</h2>
         <p>Wallet balance: <strong>{money(wallet.balanceCents)}</strong></p>
-        <p className="muted">No game is open right now — check back before puck drop.</p>
+        <p className="muted">
+          {game?.phase === 'closed'
+            ? 'The draft is closed — the game has started. Good luck!'
+            : 'No game is open right now — check back before puck drop.'}
+        </p>
         <button className="ghost" onClick={() => setWallet(null)}>Switch family</button>
       </div>
     );
@@ -914,7 +948,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
 
 function Board({ game, flash, fail }) {
   if (!game) return <div className="card"><p>Loading…</p></div>;
-  const isOpen = game.phase === 'open';
+  const isOpen = game.phase === 'open' || game.phase === 'closed';
   return (
     <div>
       <div className="card">
@@ -924,6 +958,7 @@ function Board({ game, flash, fail }) {
         {isOpen ? (
           <p className="game-banner">
             📅 {fmtDate(game.gameDate)} · <strong>Foxes vs {game.opponent || 'TBD'}</strong> · Goalie #{game.startingGoalie}
+            {game.phase === 'closed' ? ' · Draft closed — game in progress' : ''}
           </p>
         ) : (
           <p className="game-banner setup">
