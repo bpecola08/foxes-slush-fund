@@ -113,6 +113,7 @@ async function loadState(firestore, tx) {
         opponent: g.opponent ?? null,
         startingGoalie: g.startingGoalie ?? null,
         drawMode: g.drawMode || 'mixed',
+        scratched: g.scratched || [],
         pots: g.pots,
         carryover: g.carryover,
         startingPots: g.startingPots,

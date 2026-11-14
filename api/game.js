@@ -1,10 +1,11 @@
 // POST /api/game — { password, action, ... }.
 // Password-gated organizer endpoint for setting up the next game.
-// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks'.
+// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'setScratched' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks'.
 //   setInfo:      { gameDate, opponent } -> { game }
 //   setCarryover: { category, amountCents } -> { game }
 //   setDrawMode:  { drawMode } -> { game }   ('mixed' | 'virtual' | 'physical')
-//   open:         { gameDate, opponent, startingGoalie } -> { game }
+//   setScratched: { scratched: [jersey numbers] } -> { scratched, alreadyPicked }   (players out for this game; decks rebuild, drawn cards stay drawn)
+//   open:         { gameDate, opponent, startingGoalie, scratched? } -> { game }
 //   closeDraft:   {} -> { game }   (draft closed once the real game starts)
 //   reopenDraft:  {} -> { game }   (undo a close)
 //   rebuildDecks: {} -> { firstGoal: {before, after}, firstPenalty: {...}, playmaker: {...} }   (one-time fix: rebuild the open game's decks from the starting goalie, keeping drawn cards out)
@@ -39,12 +40,20 @@ module.exports = handler(async (body) => {
     });
     return { game };
   }
+  if (action === 'setScratched') {
+    const out = await db.withState((state) => {
+      const r = logic.setScratched(state, body.scratched);
+      return { result: r };
+    });
+    return { ...out };
+  }
   if (action === 'open') {
     const game = await db.withState((state) => {
       const g = logic.openGame(state, {
         gameDate: body.gameDate,
         opponent: body.opponent,
         startingGoalie: body.startingGoalie,
+        scratched: body.scratched,
       });
       return { result: g };
     });

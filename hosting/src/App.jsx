@@ -51,8 +51,10 @@ function fullName(buyer, familyId) {
 // all three categories then.
 const GOALIES = [29, 88];
 
-// Who can be picked for a category, given the starting goalie.
-function inDraw(number, category, startingGoalie) {
+// Who can be picked for a category, given the starting goalie and the
+// game's scratched players (out of every category).
+function inDraw(number, category, startingGoalie, scratched) {
+  if (scratched && scratched.includes(number)) return false; // scratched — not playing this game
   if (number === 29 && startingGoalie !== 29) return false; // Harrison is out when he is the backup
   if (category === 'firstGoal' && number === startingGoalie) return false; // goalie in net cannot score
   return true;
@@ -372,6 +374,9 @@ function OrganizerPage({ game, wallets, flash, fail }) {
   // Which category (if any) the organizer is changing after a wrong pick.
   const [changing, setChanging] = useState(null);
 
+  // Scratched players (not playing this game) — multi-select checklist.
+  const [scratchSel, setScratchSel] = useState([]);
+
   // Change password
   const [newPw, setNewPw] = useState('');
 
@@ -387,6 +392,12 @@ function OrganizerPage({ game, wallets, flash, fail }) {
       });
     }
   }, [game?.gameId]);
+
+  // Keep the scratch checklist in step with the saved scratches — keyed on
+  // the list itself so unrelated game updates don't wipe a half-done edit.
+  useEffect(() => {
+    setScratchSel(game?.scratched || []);
+  }, [JSON.stringify(game?.scratched || [])]);
 
   const run = async (fn) => {
     setBusy(true);
@@ -484,6 +495,25 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     await run(async () => {
       const out = (await api.rebuildDecks()).data;
       flash(`Decks fixed — First Goal ${out.firstGoal.after} left, First Penalty ${out.firstPenalty.after} left, Playmaker ${out.playmaker.after} left.`);
+    });
+  };
+
+  const toggleScratch = (n) =>
+    setScratchSel((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
+
+  // Save who's out for this game. Scratched players leave every deck and
+  // can't be picked or named a winner; plays already sold stay as they are.
+  const saveScratches = async () => {
+    await run(async () => {
+      const out = (await api.setScratched(scratchSel)).data;
+      const label = (n) => `#${n} ${ROSTER.find((p) => p.number === n)?.name || ''}`;
+      let msg = out.scratched.length
+        ? `Scratched: ${out.scratched.map(label).join(', ')} — they can't be picked this game.`
+        : 'Scratches cleared — everyone is in.';
+      if (out.alreadyPicked && out.alreadyPicked.length) {
+        msg += ` Heads up: ${out.alreadyPicked.map(label).join(', ')} already had plays sold — those plays stay as they are.`;
+      }
+      flash(msg);
     });
   };
 
@@ -658,6 +688,22 @@ function OrganizerPage({ game, wallets, flash, fail }) {
       )}
 
       <div className="card">
+        <h2>Scratched players — out for this game</h2>
+        <p className="muted small">Tap anyone who isn&apos;t playing today (sick, hurt, not dressing) — as many as you need. They&apos;re removed from every category, can&apos;t be picked, and can&apos;t be named a winner. Then tap Save scratches.</p>
+        <div className="deck">
+          {ROSTER.map((p) => (
+            <button key={p.number} className={scratchSel.includes(p.number) ? 'picked' : ''} onClick={() => toggleScratch(p.number)} disabled={busy}>
+              #{p.number} {p.name}{scratchSel.includes(p.number) ? ' — OUT' : ''}
+            </button>
+          ))}
+        </div>
+        <p>
+          <button className="primary" onClick={saveScratches} disabled={busy}>Save scratches</button>{' '}
+          <span className="muted small">{scratchSel.length ? `${scratchSel.length} out: ${scratchSel.map((n) => `#${n}`).join(', ')}` : 'Nobody scratched.'}</span>
+        </p>
+      </div>
+
+      <div className="card">
         <h2>Draw mode</h2>
         <p className="muted small">Pick how this game&apos;s draft runs. Parents only get the option you set here.</p>
         <div className="row">
@@ -730,7 +776,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
                   <span className="row">
                     <select value={resolvePick[key]} onChange={(e) => setResolvePick({ ...resolvePick, [key]: e.target.value })}>
                       <option value="">Who scored / took it? …</option>
-                      {ROSTER.filter((p) => inDraw(p.number, key, game.startingGoalie)).map((p) => (
+                      {ROSTER.filter((p) => inDraw(p.number, key, game.startingGoalie, game.scratched)).map((p) => (
                         <option key={p.number} value={p.number}>#{p.number} {p.name}</option>
                       ))}
                     </select>
@@ -946,6 +992,9 @@ function ParentPortal({ game, wallets, flash, fail }) {
       <p className="muted">
         {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} · Goalie #{game.startingGoalie}
       </p>
+      {(game.scratched || []).length > 0 && (
+        <p className="muted small">Out today: {game.scratched.map((n) => `#${n} ${ROSTER.find((p) => p.number === n)?.name || ''}`).join(', ')}</p>
+      )}
 
       <h3>Who&apos;s betting?</h3>
       <div className="row">
@@ -1003,7 +1052,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
               const taken = new Set((game.tickets || []).map((t) => t.picks?.[key]?.number).filter((n) => n != null));
               // Who can be picked: the goalie in net is out of First Goal
               // only, and Harrison is out of everything when he is the backup.
-              const available = ROSTER.filter((p) => !taken.has(p.number) && inDraw(p.number, key, game.startingGoalie));
+              const available = ROSTER.filter((p) => !taken.has(p.number) && inDraw(p.number, key, game.startingGoalie, game.scratched));
               return (
                 <div key={key} className="draft-cat">
                   <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {available.length} chips left
