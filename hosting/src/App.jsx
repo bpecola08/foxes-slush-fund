@@ -1010,6 +1010,22 @@ function ParentPortal({ game, wallets, flash, fail }) {
 
 // ---------------------------------------------------------------------------
 
+function picksByCategory(game, key) {
+  // Group every ticket's pick for one category by player number, so the
+  // Board reads "who picked which player" instead of one card per person.
+  const byNumber = new Map();
+  (game.tickets || []).forEach((t) => {
+    const pick = t.picks?.[key];
+    if (!pick) return;
+    const bettor = t.bettor || t.buyer;
+    if (!byNumber.has(pick.number)) {
+      byNumber.set(pick.number, { number: pick.number, name: pick.name, bettors: [] });
+    }
+    byNumber.get(pick.number).bettors.push(bettor);
+  });
+  return [...byNumber.values()].sort((a, b) => a.number - b.number);
+}
+
 function Board({ game, flash, fail }) {
   if (!game) return <div className="card"><p>Loading…</p></div>;
   const isOpen = game.phase === 'open' || game.phase === 'closed';
@@ -1050,14 +1066,41 @@ function Board({ game, flash, fail }) {
         </div>
       </div>
       <div className="card">
-        <h3>Tickets ({(game.tickets || []).length})</h3>
+        <h3>Picks by category ({(game.tickets || []).length} tickets)</h3>
         {isOpen ? (
           (game.tickets || []).length === 0 ? (
             <p className="muted">No tickets sold yet.</p>
           ) : (
-            (game.tickets || []).map((t) => (
-              <TicketCard key={t.id} ticket={t} game={game} showPayouts />
-            ))
+            CATEGORIES.map(({ key, label }) => {
+              const res = game.resolutions?.[key];
+              const picks = picksByCategory(game, key);
+              return (
+                <div key={key} className="category-picks">
+                  <h4>
+                    {label} — {money(game.pots?.[key] || 0)}
+                    {res && (
+                      res.winners.length === 0
+                        ? <span className="badge rolled"> Rollover</span>
+                        : <span> · Winner: #{res.playerNumber} {res.playerName}</span>
+                    )}
+                  </h4>
+                  {picks.length === 0 ? (
+                    <p className="muted">No picks yet.</p>
+                  ) : (
+                    picks.map((p) => {
+                      const isWinner = res && res.playerNumber === p.number;
+                      return (
+                        <div key={p.number} className={`pick-row ${isWinner ? 'winner' : ''}`}>
+                          <span>#{p.number} {p.name}</span>
+                          <span>{p.bettors.join(', ')}</span>
+                          {isWinner && <span className="win-star"> ★ Winner</span>}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })
           )
         ) : (
           <p className="muted">No tickets — no game in progress. Winners from the last game are in the Game Log.</p>
