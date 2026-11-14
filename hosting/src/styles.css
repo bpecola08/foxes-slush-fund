@@ -36,7 +36,9 @@ label { display: block; margin: 6px 0; }
 .badge.warn { background: #c8102e; color: #ffffff; }
 .negative { color: #c8102e; }
 .payout-summary { background: #f5f5f5; }
-.payout-summary-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid #dddddd; }
+.payout-summary-row { padding: 6px 0; border-bottom: 1px solid #dddddd; }
+.payout-summary-line { display: flex; justify-content: space-between; gap: 8px; }
+.payout-summary-row .payout-btns { margin-top: 6px; }
 .payout-summary-total { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0 0; font-size: 1.1rem; }
 .category-picks { margin-top: 12px; }
 .category-picks h4 { margin: 0 0 6px; }

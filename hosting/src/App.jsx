@@ -692,8 +692,17 @@ function OrganizerPage({ game, wallets, flash, fail }) {
               <h3>Who to pay</h3>
               {allWinners.map((w, i) => (
                 <div key={`${w.category}-${w.ticketId}-${i}`} className="payout-summary-row">
-                  <span><strong>{w.buyer}</strong> — {w.categoryLabel}</span>
-                  <span><strong>{money(w.payoutCents)}</strong> <PayoutBadge disposition={w.disposition} /></span>
+                  <div className="payout-summary-line">
+                    <span><strong>{w.buyer}</strong> — {w.categoryLabel}</span>
+                    <span><strong>{money(w.payoutCents)}</strong> <PayoutBadge disposition={w.disposition} /></span>
+                  </div>
+                  <div className="payout-btns">
+                    <button onClick={() => payout(w.category, w.ticketId, 'paid')}>Paid — I paid them</button>
+                    <button onClick={() => payout(w.category, w.ticketId, 'rolled')}>Roll over to account</button>
+                    {w.disposition !== 'unmarked' && (
+                      <button className="ghost" onClick={() => payout(w.category, w.ticketId, 'unmarked')}>Undo</button>
+                    )}
+                  </div>
                 </div>
               ))}
               <div className="payout-summary-total">
