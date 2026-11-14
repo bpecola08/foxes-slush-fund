@@ -444,6 +444,21 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  const setDrawMode = async (drawMode) => {
+    await run(async () => {
+      await api.setDrawMode(drawMode);
+      flash(
+        drawMode === 'mixed'
+          ? 'Draw mode set — parents pick virtual or real chips per ticket.'
+          : drawMode === 'physical'
+            ? 'Draw mode set — this game uses real chips only.'
+            : 'Draw mode set — this game uses the virtual draw only.'
+      );
+    });
+  };
+
+  const drawMode = game.drawMode || 'mixed';
+
   return (
     <div>
       <div className="card">
@@ -465,6 +480,23 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         ) : (
           <p className="muted">Nothing owed right now.</p>
         )}
+      </div>
+
+      <div className="card">
+        <h2>Draw mode</h2>
+        <p className="muted small">Pick how this game&apos;s draft runs. Parents only get the option you set here.</p>
+        <div className="row">
+          <button className={drawMode === 'virtual' ? 'primary' : ''} onClick={() => setDrawMode('virtual')} disabled={busy}>🎲 Virtual draw</button>
+          <button className={drawMode === 'physical' ? 'primary' : ''} onClick={() => setDrawMode('physical')} disabled={busy}>🪙 Real chips</button>
+          <button className={drawMode === 'mixed' ? 'primary' : ''} onClick={() => setDrawMode('mixed')} disabled={busy}>Let parents choose</button>
+        </div>
+        <p className="muted small">
+          {drawMode === 'virtual'
+            ? 'Now: virtual draw only — parents tap the face-down cards in the app.'
+            : drawMode === 'physical'
+              ? 'Now: real chips only — parents draw a chip from the bag, then tap the player they got.'
+              : 'Now: parents pick virtual or real chips per ticket.'}
+        </p>
       </div>
 
       {game.phase === 'setup' && (
@@ -615,6 +647,16 @@ function ParentPortal({ game, wallets, flash, fail }) {
   const [otherName, setOtherName] = useState('');
   const [mode, setMode] = useState('virtual'); // 'virtual' (app draws) | 'physical' (real chip from the bag)
 
+  // The organizer may have locked the game to one draw method. The
+  // effective mode is the game's mode when locked, otherwise the parent's
+  // own pick. Syncing here clears stale picks when the organizer flips it.
+  const drawMode = game?.drawMode || 'mixed';
+  const effectiveMode = drawMode === 'mixed' ? mode : drawMode;
+  useEffect(() => {
+    setMode(effectiveMode);
+    setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
+  }, [effectiveMode]);
+
   const members = wallet ? familyMembers(wallet) : [];
 
   const pickBettor = (name) => {
@@ -658,13 +700,13 @@ function ParentPortal({ game, wallets, flash, fail }) {
     const picks = { ...selected };
     const count = CATEGORIES.filter((c) => picks[c.key] !== null).length;
     if (count === 0) {
-      return fail(new Error(mode === 'physical'
+      return fail(new Error(effectiveMode === 'physical'
         ? 'Tap a player in at least one category first.'
         : 'Tap one card in at least one category first.'));
     }
     setBusy(true);
     try {
-      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, mode)).data;
+      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, effectiveMode)).data;
       setLastTicket(ticket);
       setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
       flash(`Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
@@ -741,18 +783,26 @@ function ParentPortal({ game, wallets, flash, fail }) {
       ) : (
         <div>
           <h3>Draft {bettor}&apos;s picks</h3>
-          <div className="row">
-            <button className={mode === 'virtual' ? 'primary' : ''} onClick={() => pickMode('virtual')}>🎲 Virtual chips</button>
-            <button className={mode === 'physical' ? 'primary' : ''} onClick={() => pickMode('physical')}>🪙 Real chips</button>
-          </div>
-          {mode === 'virtual' ? (
+          {drawMode === 'mixed' ? (
+            <div className="row">
+              <button className={mode === 'virtual' ? 'primary' : ''} onClick={() => pickMode('virtual')}>🎲 Virtual chips</button>
+              <button className={mode === 'physical' ? 'primary' : ''} onClick={() => pickMode('physical')}>🪙 Real chips</button>
+            </div>
+          ) : (
+            <p className="muted small">
+              {drawMode === 'physical'
+                ? 'The organizer set this game to real chips — draw from the bag, then tap the player you got.'
+                : 'The organizer set this game to the virtual draw — tap the face-down cards below.'}
+            </p>
+          )}
+          {effectiveMode === 'virtual' ? (
             <p className="muted small">Tap one face-down card per category — $2 per category ($1 to the pot, $1 to the slush). The cards are shuffled — you won’t know who you drew until you buy.</p>
           ) : (
             <p className="muted small">Draw a real chip from the bag for each category, then tap the player you got below — $2 per category ($1 to the pot, $1 to the slush). Players already drawn are gone from the bag.</p>
           )}
           {CATEGORIES.map(({ key, label }) => {
             const count = game.deckCounts?.[key] ?? 0;
-            if (mode === 'physical') {
+            if (effectiveMode === 'physical') {
               const taken = new Set((game.tickets || []).map((t) => t.picks?.[key]?.number).filter((n) => n != null));
               const available = ROSTER.filter((p) => !taken.has(p.number));
               return (
@@ -889,7 +939,8 @@ function GameLogPage({ log }) {
           <div key={entry.id} className="log-entry">
             <button className="log-head" onClick={() => setOpenId(open ? null : entry.id)}>
               <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)} ·{' '}
-              Goalie #{entry.startingGoalie} · Slush {money(entry.slushGameCents)} (season {money(entry.slushSeasonCents)})
+              Goalie #{entry.startingGoalie}
+              {entry.drawMode === 'physical' ? ' · 🪙 Real chips' : entry.drawMode === 'virtual' ? ' · 🎲 Virtual draw' : ''} · Slush {money(entry.slushGameCents)} (season {money(entry.slushSeasonCents)})
               <span>{open ? ' ▲' : ' ▼'}</span>
             </button>
             {open && (
