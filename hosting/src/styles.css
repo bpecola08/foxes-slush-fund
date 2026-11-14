@@ -1,0 +1,52 @@
+body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f4f6f8; color: #1c2333; }
+.app { max-width: 760px; margin: 0 auto; padding: 16px; }
+header h1 { margin: 0 0 4px; font-size: 1.5rem; }
+.muted { color: #5a6474; }
+.small { font-size: 0.85rem; }
+.card { background: #fff; border-radius: 12px; padding: 16px; margin: 12px 0; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+h2 { margin-top: 0; }
+h3 { margin-bottom: 6px; }
+button { background: #14532d; color: #fff; border: none; border-radius: 8px; padding: 9px 14px; margin: 4px 6px 4px 0; cursor: pointer; font-size: 0.95rem; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: #166534; font-weight: 700; }
+button.ghost { background: transparent; color: #14532d; border: 1px solid #14532d; }
+button.danger { background: #991b1b; }
+input, select { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 8px; margin: 4px 6px 4px 0; font-size: 0.95rem; max-width: 100%; }
+label { display: block; margin: 6px 0; }
+.row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.menu { display: flex; flex-direction: column; gap: 4px; }
+.menu button { text-align: left; }
+.notice { background: #dcfce7; border: 1px solid #86efac; color: #14532d; padding: 10px; border-radius: 8px; margin: 10px 0; }
+.error { background: #fee2e2; border: 1px solid #fca5a5; color: #7f1d1d; padding: 10px; border-radius: 8px; margin: 10px 0; }
+.warn { background: #fef3c7; border: 1px solid #fcd34d; color: #78350f; padding: 10px; border-radius: 8px; }
+.ticket { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin: 8px 0; }
+.ticket-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.ticket-head .price { margin-left: auto; font-weight: 700; }
+.picks { margin-top: 6px; display: grid; gap: 2px; }
+.pick.winner { background: #fef9c3; border-radius: 6px; padding: 2px 6px; }
+.win-star { color: #854d0e; font-weight: 700; }
+.badge { display: inline-block; font-size: 0.75rem; font-weight: 700; border-radius: 999px; padding: 2px 8px; margin-left: 4px; }
+.badge.paid { background: #dcfce7; color: #14532d; }
+.badge.rolled { background: #dbeafe; color: #1e40af; }
+.badge.unmarked { background: #fef3c7; color: #78350f; }
+.payout-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px; padding: 6px 0; border-top: 1px dashed #e2e8f0; }
+.payout-btns button { padding: 6px 10px; font-size: 0.85rem; }
+.pots { display: grid; gap: 4px; margin: 8px 0; }
+.pot { background: #f8fafc; border-radius: 8px; padding: 8px; }
+.deck { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.card-back { width: 44px; height: 60px; background: #14532d; color: #fff; font-size: 1.3rem; border-radius: 8px; padding: 0; margin: 0; }
+.card-back.picked { background: #b45309; outline: 3px solid #f59e0b; }
+.draft-cat { margin: 12px 0; }
+.wallet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin-top: 8px; }
+.wallet-chip { background: #f8fafc; border-radius: 8px; padding: 6px 8px; font-size: 0.85rem; }
+.resolve-row { padding: 8px 0; border-top: 1px solid #e2e8f0; }
+.danger-zone { border: 2px solid #fecaca; }
+.game-banner { background: #dcfce7; border: 1px solid #86efac; border-radius: 8px; padding: 10px; font-size: 1.05rem; }
+.game-banner.setup { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+.log-entry { border: 1px solid #e2e8f0; border-radius: 10px; margin: 8px 0; overflow: hidden; }
+.log-head { width: 100%; text-align: left; background: #f8fafc; color: #1c2333; border-radius: 0; margin: 0; padding: 10px; }
+.log-body { padding: 10px; }
+@media (max-width: 560px) {
+  .app { padding: 10px; }
+  .card { padding: 12px; }
+}
