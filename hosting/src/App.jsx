@@ -312,7 +312,9 @@ function Landing({ game, log, onGo, onInit }) {
                   <strong>{label}</strong>: {winnerText(entry.resolutions?.[key], true)}
                 </div>
               ))}
-              <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>
+              {entry.imported
+                ? <div>Slush for this game: <strong>not recorded</strong></div>
+                : <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>}
             </div>
           ))}
           {log.length > 2 && (
@@ -635,6 +637,29 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  // Import games into the Game Log from a file (a list of game records,
+  // e.g. older games rebuilt from the old pool dashboard). Add-only:
+  // games already in the log (same date and opponent) are skipped, and
+  // wallets, slush and the current game are never touched.
+  const importGames = async (file) => {
+    if (!file) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      return fail(new Error('That file could not be read as game records.'));
+    }
+    const entries = Array.isArray(parsed) ? parsed : parsed.entries || parsed.log;
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return fail(new Error('That file has no games in it.'));
+    }
+    if (!window.confirm(`Import ${entries.length} game(s) into the Game Log? Games already logged (same date and opponent) are skipped. Wallets, slush and the current game are not touched.`)) return;
+    await run(async () => {
+      const out = (await api.importLog(entries)).data;
+      flash(`Imported ${out.imported} game(s) into the Game Log${out.skipped ? ` — ${out.skipped} already there, skipped` : ''}.`);
+    });
+  };
+
   const payAmanda = async () => {
     if (!game.slushCents || game.slushCents <= 0) return;
     if (!window.confirm(`Send ${money(game.slushCents)} to Amanda? This marks the slush as paid and resets the amount owed to $0.`)) return;
@@ -899,6 +924,18 @@ function OrganizerPage({ game, wallets, flash, fail }) {
             const f = e.target.files && e.target.files[0];
             e.target.value = '';
             restoreBackup(f);
+          }}
+        />
+        <h3>Import games into the Game Log</h3>
+        <p className="muted small">Add older games from a game-records file (for example, the season&apos;s earlier games). Importing only adds to the Game Log — games already logged are skipped, and wallets, slush and the current game are never touched.</p>
+        <input
+          type="file"
+          accept="application/json,.json"
+          disabled={busy}
+          onChange={(e) => {
+            const f = e.target.files && e.target.files[0];
+            e.target.value = '';
+            importGames(f);
           }}
         />
       </div>
@@ -1293,9 +1330,10 @@ function GameLogPage({ log }) {
         return (
           <div key={entry.id} className="log-entry">
             <button className="log-head" onClick={() => setOpenId(open ? null : entry.id)}>
-              <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)} ·{' '}
-              Goalie #{entry.startingGoalie}
-              {entry.drawMode === 'physical' ? ' · 🪙 Real chips' : entry.drawMode === 'virtual' ? ' · 🎲 Virtual draw' : ''} · Slush {money(entry.slushGameCents)} (season {money(entry.slushSeasonCents)})
+              <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)}
+              {entry.startingGoalie ? <> · Goalie #{entry.startingGoalie}</> : ''}
+              {entry.drawMode === 'physical' ? ' · 🪙 Real chips' : entry.drawMode === 'virtual' ? ' · 🎲 Virtual draw' : ''}
+              {entry.imported ? ' · Slush not recorded' : <> · Slush {money(entry.slushGameCents)} (season {money(entry.slushSeasonCents)})</>}
               <span>{open ? ' ▲' : ' ▼'}</span>
             </button>
             {open && (
