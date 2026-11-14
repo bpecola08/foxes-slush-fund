@@ -11,6 +11,7 @@ button:disabled { opacity: .5; cursor: default; }
 button.primary { background: #c8102e; font-weight: 700; }
 button.ghost { background: transparent; color: #111111; border: 1px solid #111111; }
 button.danger { background: #7f0000; }
+button.danger-small { padding: 5px 10px; font-size: 0.8rem; }
 button.parent-hero { display: block; width: 100%; font-size: 1.3rem; font-weight: 800; padding: 16px; margin: 12px 0; }
 .slush-total { font-size: 1.25rem; font-weight: 800; color: #c8102e; margin: 8px 0; }
 input, select { padding: 8px 10px; border: 1px solid #cccccc; border-radius: 8px; margin: 4px 6px 4px 0; font-size: 0.95rem; max-width: 100%; }
@@ -42,7 +43,8 @@ label { display: block; margin: 6px 0; }
 .wallet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin-top: 8px; }
 .wallet-chip { background: #f5f5f5; border-radius: 8px; padding: 6px 8px; font-size: 0.85rem; }
 .resolve-row { padding: 8px 0; border-top: 1px solid #e5e5e5; }
-.danger-zone { border: 2px solid #c8102e; }
+.danger-zone { border: 2px solid #c8102e; margin-top: 32px; }
+.factory-reset { margin: 10px 0 28px; }
 .game-banner { background: #111111; color: #ffffff; border: 1px solid #111111; border-radius: 8px; padding: 10px; font-size: 1.05rem; }
 .game-banner.setup { background: #ffffff; border-color: #cccccc; color: #111111; }
 .log-entry { border: 1px solid #e5e5e5; border-radius: 10px; margin: 8px 0; overflow: hidden; }

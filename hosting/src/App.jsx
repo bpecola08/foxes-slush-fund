@@ -553,7 +553,9 @@ function OrganizerPage({ game, wallets, flash, fail }) {
       <div className="card danger-zone">
         <h2>Factory reset</h2>
         <p className="muted small">Wipes tickets, pots, carryovers, slush, all wallets to $0, and the whole Game Log. The organizer password stays the same.</p>
-        <button className="danger" onClick={factoryReset} disabled={busy}>Factory reset — wipe everything</button>
+        <div className="factory-reset">
+          <button className="danger danger-small" onClick={factoryReset} disabled={busy}>Factory reset — wipe everything</button>
+        </div>
         <h3>Change organizer password</h3>
         <input type="password" placeholder="New password (min 4 chars)" value={newPw} onChange={(e) => setNewPw(e.target.value)} />
         <button
