@@ -54,6 +54,8 @@ export const api = {
     post('game', withPassword({ action: 'setInfo', gameDate, opponent })),
   setCarryover: (category, amountCents) =>
     post('game', withPassword({ action: 'setCarryover', category, amountCents })),
+  setDrawMode: (drawMode) =>
+    post('game', withPassword({ action: 'setDrawMode', drawMode })),
   openGame: (gameDate, opponent, startingGoalie) =>
     post('game', withPassword({ action: 'open', gameDate, opponent, startingGoalie })),
   resolveCategory: (category, playerNumber) =>
