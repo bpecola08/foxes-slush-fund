@@ -720,9 +720,6 @@ function OrganizerPage({ game, wallets, flash, fail }) {
               {totalOwedCents === 0 && <p className="muted small">Everyone is settled — nothing left to hand out.</p>}
             </div>
           )}
-          {(game.tickets || []).map((t) => (
-            <TicketCard key={t.id} ticket={t} game={game} showPayouts onPayout={payout} />
-          ))}
           {(game.tickets || []).length === 0 && <p className="muted">No tickets sold yet.</p>}
 
           <h3>End the game</h3>
