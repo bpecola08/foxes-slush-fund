@@ -288,6 +288,7 @@ function Landing({ game, log, onGo, onInit }) {
       )}
       <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
       <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
+      <p className="muted small" style={{ textAlign: 'center' }}>Parents log in with their kid&apos;s jersey number.</p>
       <button className="nav-hero" onClick={() => onGo('board')}>All Picks &amp; Winners</button>
       <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
       {log && log.length > 0 && (
