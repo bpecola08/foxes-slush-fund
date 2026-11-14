@@ -77,6 +77,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
       <div className="ticket-head">
         <strong>{ticket.bettor || ticket.buyer}</strong>
         <span className="muted">{ticket.familyLabel}</span>
+        <span className="muted small">{ticket.mode === 'physical' ? '🪙 real chip' : '🎲 virtual'}</span>
         <span className="price">{money(ticket.paidCents)}</span>
       </div>
       <div className="picks">
@@ -233,8 +234,8 @@ function Landing({ game, log, onGo, onInit }) {
       )}
       <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
       <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
+      <button className="organizer-hero" onClick={() => onGo('organizer')}>Organizer Page</button>
       <div className="menu">
-        <button onClick={() => onGo('organizer')}>Organizer Page</button>
         <button onClick={() => onGo('board')}>All Picks &amp; Winners</button>
         <button onClick={() => onGo('gamelog')}>Game Log</button>
       </div>
@@ -466,14 +467,6 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         ) : (
           <p className="muted">Nothing owed right now.</p>
         )}
-        {(game.slushPayments || []).length > 0 && (
-          <div>
-            <h3>Paid to Amanda</h3>
-            {(game.slushPayments || []).map((p, i) => (
-              <div key={i}>{money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}</div>
-            ))}
-          </div>
-        )}
       </div>
 
       {game.phase === 'setup' && (
@@ -577,6 +570,15 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         </div>
       )}
 
+      {(game.slushPayments || []).length > 0 && (
+        <div className="card">
+          <h2>Paid to Amanda</h2>
+          {(game.slushPayments || []).map((p, i) => (
+            <div key={i}>{money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}</div>
+          ))}
+        </div>
+      )}
+
       <div className="card danger-zone">
         <h2>Factory reset</h2>
         <p className="muted small">Wipes tickets, pots, carryovers, slush, all wallets to $0, and the whole Game Log. The organizer password stays the same.</p>
@@ -611,6 +613,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
   const [lastTicket, setLastTicket] = useState(null);
   const [bettor, setBettor] = useState('');
   const [otherName, setOtherName] = useState('');
+  const [mode, setMode] = useState('virtual'); // 'virtual' (app draws) | 'physical' (real chip from the bag)
 
   const members = wallet ? familyMembers(wallet) : [];
 
@@ -618,6 +621,13 @@ function ParentPortal({ game, wallets, flash, fail }) {
     setBettor(name);
     setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
     setLastTicket(null);
+  };
+
+  // Switching draw method clears the picks — a virtual card position is not
+  // a player number, and a physical player number is not a card position.
+  const pickMode = (m) => {
+    setMode(m);
+    setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
   };
 
   const login = () => {
@@ -647,10 +657,14 @@ function ParentPortal({ game, wallets, flash, fail }) {
     if (!bettor) return fail(new Error('Pick who is betting first.'));
     const picks = { ...selected };
     const count = CATEGORIES.filter((c) => picks[c.key] !== null).length;
-    if (count === 0) return fail(new Error('Tap one card in at least one category first.'));
+    if (count === 0) {
+      return fail(new Error(mode === 'physical'
+        ? 'Tap a player in at least one category first.'
+        : 'Tap one card in at least one category first.'));
+    }
     setBusy(true);
     try {
-      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks)).data;
+      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, mode)).data;
       setLastTicket(ticket);
       setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
       flash(`Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
@@ -726,10 +740,41 @@ function ParentPortal({ game, wallets, flash, fail }) {
         </div>
       ) : (
         <div>
-          <h3>Draft {bettor}&apos;s picks — tap one face-down card per category</h3>
-          <p className="muted small">$2 per category ($1 to the pot, $1 to the slush). The cards are shuffled — you won’t know who you drew until you buy.</p>
+          <h3>Draft {bettor}&apos;s picks</h3>
+          <div className="row">
+            <button className={mode === 'virtual' ? 'primary' : ''} onClick={() => pickMode('virtual')}>🎲 Virtual chips</button>
+            <button className={mode === 'physical' ? 'primary' : ''} onClick={() => pickMode('physical')}>🪙 Real chips</button>
+          </div>
+          {mode === 'virtual' ? (
+            <p className="muted small">Tap one face-down card per category — $2 per category ($1 to the pot, $1 to the slush). The cards are shuffled — you won’t know who you drew until you buy.</p>
+          ) : (
+            <p className="muted small">Draw a real chip from the bag for each category, then tap the player you got below — $2 per category ($1 to the pot, $1 to the slush). Players already drawn are gone from the bag.</p>
+          )}
           {CATEGORIES.map(({ key, label }) => {
             const count = game.deckCounts?.[key] ?? 0;
+            if (mode === 'physical') {
+              const taken = new Set((game.tickets || []).map((t) => t.picks?.[key]?.number).filter((n) => n != null));
+              const available = ROSTER.filter((p) => !taken.has(p.number));
+              return (
+                <div key={key} className="draft-cat">
+                  <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {available.length} chips left
+                  <div className="deck">
+                    {available.map((p) => (
+                      <button
+                        key={p.number}
+                        className={selected[key] === p.number ? 'picked' : ''}
+                        onClick={() => setSelected({ ...selected, [key]: selected[key] === p.number ? null : p.number })}
+                      >
+                        #{p.number} {p.name}
+                      </button>
+                    ))}
+                    {available.length === 0 && (
+                      <span className="muted small"> No chips left in the bag for this one — switch to virtual or skip it.</span>
+                    )}
+                  </div>
+                </div>
+              );
+            }
             return (
               <div key={key} className="draft-cat">
                 <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {count} cards left
