@@ -109,7 +109,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
         <span className="muted">{ticket.familyLabel}</span>
         <span className="muted small">{ticket.mode === 'physical' ? '🪙 real chip' : '🎲 virtual'}</span>
         {ticket.payLater && <span className="badge warn">Play now pay later</span>}
-        <span className="price">Ticket {money(ticket.paidCents)}</span>
+        <span className="price">Play {money(ticket.paidCents)}</span>
       </div>
       <div className="picks">
         {CATEGORIES.map(({ key, label }) => {
@@ -274,7 +274,7 @@ function Landing({ game, log, onGo, onInit }) {
           {game.phase === 'open' || game.phase === 'closed' ? (
             <>
               📅 {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} ·{' '}
-              <strong>{game.tickets?.length || 0} tickets sold</strong>
+              <strong>{game.tickets?.length || 0} {(game.tickets?.length || 0) === 1 ? 'play' : 'plays'}</strong>
               {game.phase === 'closed' ? ' · Draft closed — game in progress' : ''}
             </>
           ) : (
@@ -343,7 +343,7 @@ function Landing({ game, log, onGo, onInit }) {
       <p className="muted small">
         Parents log in with their kid&apos;s jersey number. The organizer logs in with the
         organizer password. Winnings are paid out by the organizer — or rolled into the
-        family&apos;s account as credit for future tickets.
+        family&apos;s account as credit for future plays.
       </p>
     </div>
   );
@@ -462,19 +462,19 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
-  // Close the draft once the real game starts — no more tickets, but the
+  // Close the draft once the real game starts — no more plays, but the
   // game can still be resolved after it ends.
   const closeDraft = async () => {
     await run(async () => {
       await api.closeDraft();
-      flash('Draft closed — the game has started. No more tickets.');
+      flash('Draft closed — the game has started. No more plays.');
     });
   };
 
   const reopenDraft = async () => {
     await run(async () => {
       await api.reopenDraft();
-      flash('Draft reopened — parents can buy tickets again.');
+      flash('Draft reopened — parents can buy plays again.');
     });
   };
 
@@ -559,7 +559,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
   };
 
   const factoryReset = async () => {
-    if (!window.confirm('FACTORY RESET — this wipes EVERYTHING: tickets, pots, carryovers, slush, all wallets to $0, and the whole Game Log. The organizer password stays the same. Are you sure?')) return;
+    if (!window.confirm('FACTORY RESET — this wipes EVERYTHING: plays, pots, carryovers, slush, all wallets to $0, and the whole Game Log. The organizer password stays the same. Are you sure?')) return;
     if (!window.confirm('Really sure? There is no undo.')) return;
     await run(async () => {
       await api.factoryReset();
@@ -644,7 +644,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
             <button className="ghost" onClick={rebuildDecks} disabled={busy}>Fix the decks</button>
           </div>
           <h3>Close the draft</h3>
-          <p className="muted small">Once the real game starts, close the draft so no more tickets can be bought. You can still resolve the game after it ends.</p>
+          <p className="muted small">Once the real game starts, close the draft so no more plays can be bought. You can still resolve the game after it ends.</p>
           <button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button>
         </div>
       )}
@@ -652,7 +652,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
       {game.phase === 'closed' && (
         <div className="card">
           <h2>Draft closed — game in progress</h2>
-          <p className="muted">No more tickets can be bought. Resolve the game below once it ends, or reopen the draft if you closed it early.</p>
+          <p className="muted">No more plays can be bought. Resolve the game below once it ends, or reopen the draft if you closed it early.</p>
           <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button>
         </div>
       )}
@@ -768,7 +768,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
               {totalOwedCents === 0 && <p className="muted small">Everyone is settled — nothing left to hand out.</p>}
             </div>
           )}
-          {(game.tickets || []).length === 0 && <p className="muted">No tickets sold yet.</p>}
+          {(game.tickets || []).length === 0 && <p className="muted">No plays yet.</p>}
 
           <h3>End the game</h3>
           {unmarkedWinners.length > 0 && (
@@ -801,7 +801,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
 
       <div className="card danger-zone">
         <h2>Factory reset</h2>
-        <p className="muted small">Wipes tickets, pots, carryovers, slush, all wallets to $0, and the whole Game Log. The organizer password stays the same.</p>
+        <p className="muted small">Wipes plays, pots, carryovers, slush, all wallets to $0, and the whole Game Log. The organizer password stays the same.</p>
         <div className="factory-reset">
           <button className="danger danger-small" onClick={factoryReset} disabled={busy}>Factory reset — wipe everything</button>
         </div>
@@ -901,8 +901,8 @@ function ParentPortal({ game, wallets, flash, fail }) {
       setLastTicket(ticket);
       setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
       flash(payLater
-        ? `Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} on Play now pay later. Good luck!`
-        : `Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
+        ? `Play bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} on Play now pay later. Good luck!`
+        : `Play bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
     } catch (e) {
       fail(e);
     } finally {
@@ -973,9 +973,9 @@ function ParentPortal({ game, wallets, flash, fail }) {
         <p className="muted">Pick who&apos;s betting above to draft your picks.</p>
       ) : myTicket || lastTicket ? (
         <div>
-          <h3>{bettor}&apos;s ticket</h3>
+          <h3>{bettor}&apos;s play</h3>
           <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} />
-          <p className="muted small">One ticket per person per game — tap another name above to buy for someone else in the family.</p>
+          <p className="muted small">One play per person per game — tap another name above to buy for someone else in the family.</p>
         </div>
       ) : (
         <div>
@@ -1052,7 +1052,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
           })}
           <p>
             <button className="primary" onClick={() => buy(false)} disabled={busy || selectedCount === 0}>
-              Buy ticket for {bettor} — ${price}.00
+              Buy play for {bettor} — ${price}.00
             </button>
           </p>
           {wallet.balanceCents < price * 100 && (
@@ -1060,7 +1060,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
               <button className="ghost" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
                 Play now pay later — ${price}.00
               </button>
-              <span className="muted small"> Your wallet is short — this ticket goes through and the balance goes negative until you pay the organizer.</span>
+              <span className="muted small"> Your wallet is short — this play goes through and the balance goes negative until you pay the organizer.</span>
             </p>
           )}
         </div>
@@ -1073,7 +1073,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
 // ---------------------------------------------------------------------------
 
 function picksByCategory(game, key) {
-  // Group every ticket's pick for one category by player number, so the
+  // Group every play's pick for one category by player number, so the
   // Board reads "who picked which player" instead of one card per person.
   const byNumber = new Map();
   (game.tickets || []).forEach((t) => {
@@ -1128,10 +1128,10 @@ function Board({ game, flash, fail }) {
         </div>
       </div>
       <div className="card">
-        <h3>Picks by category ({(game.tickets || []).length} tickets)</h3>
+        <h3>Picks by category ({(game.tickets || []).length} {(game.tickets || []).length === 1 ? 'play' : 'plays'})</h3>
         {isOpen ? (
           (game.tickets || []).length === 0 ? (
-            <p className="muted">No tickets sold yet.</p>
+            <p className="muted">No plays yet.</p>
           ) : (
             CATEGORIES.map(({ key, label }) => {
               const res = game.resolutions?.[key];
@@ -1165,7 +1165,7 @@ function Board({ game, flash, fail }) {
             })
           )
         ) : (
-          <p className="muted">No tickets — no game in progress. Winners from the last game are in the Game Log.</p>
+          <p className="muted">No plays — no game in progress. Winners from the last game are in the Game Log.</p>
         )}
       </div>
     </div>
