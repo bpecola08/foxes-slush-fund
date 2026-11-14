@@ -60,6 +60,7 @@ export const api = {
     post('game', withPassword({ action: 'open', gameDate, opponent, startingGoalie })),
   closeDraft: () => post('game', withPassword({ action: 'closeDraft' })),
   reopenDraft: () => post('game', withPassword({ action: 'reopenDraft' })),
+  rebuildFirstGoalDeck: () => post('game', withPassword({ action: 'rebuildFirstGoalDeck' })),
   resolveCategory: (category, playerNumber) =>
     post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
   setPayout: (category, ticketId, disposition) =>
