@@ -11,8 +11,12 @@ module.exports = handler(async (body) => {
   const firestore = db.db();
   await firestore.runTransaction(async (tx) => {
     const state = logic.createInitialState();
-    db.saveState(firestore, tx, state, `game-${Date.now().toString(36)}`);
+    // Firestore requires every read in a transaction to happen before every
+    // write, so the game-log read must come first — reading it after the
+    // saveState writes is what produced "Firestore transactions require all
+    // reads to be executed before all writes."
     const logSnap = await tx.get(firestore.collection('gamelog'));
+    db.saveState(firestore, tx, state, `game-${Date.now().toString(36)}`);
     for (const doc of logSnap.docs) tx.delete(doc.ref);
   });
   return {};
