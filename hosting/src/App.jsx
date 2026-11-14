@@ -242,25 +242,27 @@ function Landing({ game, log, onGo, onInit }) {
     : log && log[0]
       ? log[0].slushSeasonCents || 0
       : 0;
-  // Winner names are color-coded: a parent is red, "Grandparents" is blue.
-  // (A free-text "Someone else" name shows as a parent — there's no way to
-  // tell from the name alone whether it's a grandparent.)
-  const winnerText = (res) => {
+  // One line per category: who won and how much, then the kid they picked.
+  // No colors — parents and grandparents read the same. showAmount=false
+  // (the Pots section) leaves the amount off because the pot is already shown.
+  const winnerText = (res, showAmount = true) => {
     if (!res) return 'Not decided yet';
-    if (!res.winners || res.winners.length === 0)
-      return `#${res.playerNumber} ${res.playerName} — nobody picked it (rolled over)`;
+    const kid = `#${res.playerNumber} ${res.playerName}`;
+    if (!res.winners || res.winners.length === 0) {
+      return showAmount
+        ? <>Rolled over — {money(res.potCents || 0)} · {kid}</>
+        : <>Rolled over · {kid}</>;
+    }
+    const names = res.winners.map((w, i) => (
+      <span key={i}>
+        {i > 0 && ', '}
+        <strong>{fullName(w.buyer, w.familyId)}</strong>
+        {showAmount && <> — {money(w.payoutCents)}</>}
+      </span>
+    ));
     return (
       <>
-        #{res.playerNumber} {res.playerName} —{' '}
-        {res.winners.map((w, i) => (
-          <span key={i}>
-            {i > 0 && ', '}
-            <span className={w.buyer === 'Grandparents' ? 'winner-grandparent' : 'winner-parent'}>
-              {fullName(w.buyer, w.familyId)}
-            </span>
-            {' '}({money(w.payoutCents)})
-          </span>
-        ))}
+        {names} · {kid}
       </>
     );
   };
@@ -291,10 +293,6 @@ function Landing({ game, log, onGo, onInit }) {
       {log && log.length > 0 && (
         <div>
           <h3>Past games — winners &amp; slush</h3>
-          <p className="muted small">
-            <span className="winner-parent">Red = parent</span> ·{' '}
-            <span className="winner-grandparent">Blue = grandparents</span>
-          </p>
           {/* Only the last two games: the log is newest-first, so slice(0, 2).
               Each game gets its own outline color so the two are easy to tell apart. */}
           {log.slice(0, 2).map((entry, i) => (
@@ -302,7 +300,7 @@ function Landing({ game, log, onGo, onInit }) {
               <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)}
               {CATEGORIES.map(({ key, label }) => (
                 <div key={key}>
-                  <strong>{label}</strong>: {money(entry.pots?.[key] || 0)} · Winner: {winnerText(entry.resolutions?.[key])}
+                  <strong>{label}</strong>: {winnerText(entry.resolutions?.[key], true)}
                 </div>
               ))}
               <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>
@@ -321,7 +319,7 @@ function Landing({ game, log, onGo, onInit }) {
               <div key={key} className="pot">
                 <strong>{label}</strong>: {money(potFor(key))}
                 {(game.phase === 'open' || game.phase === 'closed') && (
-                  <span> · Winner: {winnerText(game.resolutions?.[key])}</span>
+                  <span> · Winner: {winnerText(game.resolutions?.[key], false)}</span>
                 )}
               </div>
             ))}
