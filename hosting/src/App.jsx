@@ -231,7 +231,7 @@ function Landing({ game, log, onGo, onInit }) {
           The app hasn&apos;t been set up yet. The organizer signs in once and taps “Seed the app” below.
         </p>
       )}
-      <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)} (owed to Amanda)</p>
+      <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
       <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
       <div className="menu">
         <button onClick={() => onGo('organizer')}>Organizer Page</button>
@@ -436,6 +436,15 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  const payAmanda = async () => {
+    if (!game.slushCents || game.slushCents <= 0) return;
+    if (!window.confirm(`Send ${money(game.slushCents)} to Amanda? This marks the slush as paid and resets the amount owed to $0.`)) return;
+    await run(async () => {
+      const { paidCents } = (await api.payAmanda()).data;
+      flash(`Sent ${money(paidCents)} to Amanda.`);
+    });
+  };
+
   return (
     <div>
       <div className="card">
@@ -447,6 +456,24 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           Season slush owed to Amanda: <strong>{money(game.slushCents)}</strong>
         </p>
         <button className="ghost" onClick={() => { clearOrganizerPassword(); window.location.reload(); }}>Sign out</button>
+      </div>
+
+      <div className="card">
+        <h2>Send to Amanda</h2>
+        <p>Season slush owed to Amanda: <strong>{money(game.slushCents)}</strong></p>
+        {game.slushCents > 0 ? (
+          <button className="primary" onClick={payAmanda} disabled={busy}>Send {money(game.slushCents)} to Amanda</button>
+        ) : (
+          <p className="muted">Nothing owed right now.</p>
+        )}
+        {(game.slushPayments || []).length > 0 && (
+          <div>
+            <h3>Paid to Amanda</h3>
+            {(game.slushPayments || []).map((p, i) => (
+              <div key={i}>{money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}</div>
+            ))}
+          </div>
+        )}
       </div>
 
       {game.phase === 'setup' && (
