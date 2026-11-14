@@ -56,6 +56,8 @@ export const api = {
     post('game', withPassword({ action: 'setCarryover', category, amountCents })),
   setDrawMode: (drawMode) =>
     post('game', withPassword({ action: 'setDrawMode', drawMode })),
+  setScratched: (scratched) =>
+    post('game', withPassword({ action: 'setScratched', scratched })),
   openGame: (gameDate, opponent, startingGoalie) =>
     post('game', withPassword({ action: 'open', gameDate, opponent, startingGoalie })),
   closeDraft: () => post('game', withPassword({ action: 'closeDraft' })),
