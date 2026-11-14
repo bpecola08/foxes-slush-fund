@@ -1,0 +1,1 @@
+{"dependencies":{"firebase":"^11.0.0","react":"^18.3.0","react-dom":"^18.3.0"},"devDependencies":{"@vitejs/plugin-react":"^4.3.0","vite":"^5.4.0"},"name":"foxes-slush-fund-hosting","private":true,"scripts":{"build":"vite build","dev":"vite","preview":"vite preview"},"type":"module","version":"1.0.0"}
