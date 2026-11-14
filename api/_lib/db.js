@@ -188,13 +188,17 @@ async function withState(mutator) {
     const state = await loadState(firestore, tx);
     const out = mutator(state, gameId);
     result = out && out.result !== undefined ? out.result : out;
+    // Firestore requires every read to happen before every write, so the
+    // game-log read for deleteLog must come before the saveState writes.
+    const logSnap = out && out.deleteLog
+      ? await tx.get(firestore.collection('gamelog'))
+      : null;
     saveState(firestore, tx, state, out && out.nextGameId ? out.nextGameId : gameId);
     if (out && out.logEntry) {
       const logRef = firestore.collection('gamelog').doc();
       tx.set(logRef, { ...out.logEntry, id: logRef.id });
     }
-    if (out && out.deleteLog) {
-      const logSnap = await tx.get(firestore.collection('gamelog'));
+    if (logSnap) {
       for (const doc of logSnap.docs) tx.delete(doc.ref);
     }
   });
