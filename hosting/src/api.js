@@ -61,6 +61,7 @@ export const api = {
   setPayout: (category, ticketId, disposition) =>
     post('setPayout', withPassword({ category, ticketId, disposition })),
   resetGame: () => post('resetGame', withPassword()),
+  payAmanda: () => post('payAmanda', withPassword()),
   factoryReset: () => post('factoryReset', withPassword()),
   changeOrganizerPassword: (newPassword) =>
     post('changeOrganizerPassword', withPassword({ newPassword })),
