@@ -690,13 +690,16 @@ function ParentPortal({ game, wallets, flash, fail }) {
 
   // The organizer may have locked the game to one draw method. The
   // effective mode is the game's mode when locked, otherwise the parent's
-  // own pick. Syncing here clears stale picks when the organizer flips it.
+  // own pick. Clear stale picks only when the organizer changes the
+  // game's mode — a player number is not a card position and vice versa.
+  // (The parent's own mode pick clears picks in pickMode; this effect
+  // must NOT watch effectiveMode, or it would wipe a pick right after
+  // the parent taps a player number.)
   const drawMode = game?.drawMode || 'mixed';
   const effectiveMode = drawMode === 'mixed' ? mode : drawMode;
   useEffect(() => {
-    setMode(effectiveMode);
     setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
-  }, [effectiveMode]);
+  }, [drawMode]);
 
   const members = wallet ? familyMembers(wallet) : [];
 
