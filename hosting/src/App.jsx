@@ -151,6 +151,7 @@ export default function App() {
       {view === 'landing' && (
         <Landing
           game={game}
+          log={log}
           onGo={setView}
           onInit={async () => {
             try {
@@ -172,7 +173,9 @@ export default function App() {
 
 // ---------------------------------------------------------------------------
 
-function Landing({ game, onGo, onInit }) {
+function Landing({ game, log, onGo, onInit }) {
+  const potFor = (key) =>
+    (game?.phase === 'open' ? game.pots?.[key] : game?.carryover?.[key]) || 0;
   return (
     <div className="card">
       <h2>Welcome</h2>
@@ -193,12 +196,33 @@ function Landing({ game, onGo, onInit }) {
           The app hasn&apos;t been set up yet. The organizer signs in once and taps “Seed the app” below.
         </p>
       )}
+      <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
       <div className="menu">
         <button onClick={() => onGo('organizer')}>Organizer Page</button>
-        <button onClick={() => onGo('parent')}>Parent Portal</button>
         <button onClick={() => onGo('board')}>All Picks &amp; Winners</button>
         <button onClick={() => onGo('gamelog')}>Game Log</button>
       </div>
+      {game && (
+        <div>
+          <h3>Pots{game.phase === 'open' ? ' — this game' : ' — next game (starting amounts)'}</h3>
+          <div className="pots">
+            {CATEGORIES.map(({ key, label }) => (
+              <div key={key} className="pot"><strong>{label}</strong>: {money(potFor(key))}</div>
+            ))}
+          </div>
+        </div>
+      )}
+      {log && log.length > 0 && (
+        <div>
+          <h3>Pots — past games</h3>
+          {log.map((entry) => (
+            <div key={entry.id} className="pot">
+              <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)} —{' '}
+              {CATEGORIES.map(({ key, label }) => `${label} ${money(entry.pots?.[key] || 0)}`).join(' · ')}
+            </div>
+          ))}
+        </div>
+      )}
       {!game && (
         <p>
           <button className="ghost" onClick={onInit}>Seed the app (organizer)</button>
