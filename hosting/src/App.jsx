@@ -641,6 +641,13 @@ function OrganizerPage({ game, wallets, flash, fail }) {
   // e.g. older games rebuilt from the old pool dashboard). Add-only:
   // games already in the log (same date and opponent) are skipped, and
   // wallets, slush and the current game are never touched.
+  const doImport = async (entries) => {
+    if (!window.confirm(`Import ${entries.length} game(s) into the Game Log? Games already logged (same date and opponent) are skipped. Wallets, slush and the current game are not touched.`)) return;
+    await run(async () => {
+      const out = (await api.importLog(entries)).data;
+      flash(`Imported ${out.imported} game(s) into the Game Log${out.skipped ? ` — ${out.skipped} already there, skipped` : ''}.`);
+    });
+  };
   const importGames = async (file) => {
     if (!file) return;
     let parsed;
@@ -653,10 +660,17 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     if (!Array.isArray(entries) || entries.length === 0) {
       return fail(new Error('That file has no games in it.'));
     }
-    if (!window.confirm(`Import ${entries.length} game(s) into the Game Log? Games already logged (same date and opponent) are skipped. Wallets, slush and the current game are not touched.`)) return;
+    await doImport(entries);
+  };
+  // The season's first 13 games (Aug 30 – Nov 14), rebuilt from the old
+  // pool dashboard and bundled with the app — one tap, no file to handle.
+  const loadDashboardGames = async () => {
     await run(async () => {
-      const out = (await api.importLog(entries)).data;
-      flash(`Imported ${out.imported} game(s) into the Game Log${out.skipped ? ` — ${out.skipped} already there, skipped` : ''}.`);
+      const res = await fetch('/dashboard-import.json');
+      if (!res.ok) throw new Error('Could not load the dashboard games file.');
+      const entries = await res.json();
+      if (!Array.isArray(entries) || entries.length === 0) throw new Error('The dashboard games file is empty.');
+      await doImport(entries);
     });
   };
 
@@ -927,7 +941,11 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           }}
         />
         <h3>Import games into the Game Log</h3>
-        <p className="muted small">Add older games from a game-records file (for example, the season&apos;s earlier games). Importing only adds to the Game Log — games already logged are skipped, and wallets, slush and the current game are never touched.</p>
+        <p className="muted small">The season&apos;s first 13 games (Aug 30 – Nov 14) from the old pool dashboard are bundled with the app — one tap loads them, no file to handle:</p>
+        <p>
+          <button className="primary" onClick={loadDashboardGames} disabled={busy}>Load the 13 dashboard games</button>
+        </p>
+        <p className="muted small">Or add games from a game-records file. Importing only adds to the Game Log — games already logged are skipped, and wallets, slush and the current game are never touched.</p>
         <input
           type="file"
           accept="application/json,.json"
