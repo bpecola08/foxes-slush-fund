@@ -321,6 +321,8 @@ function OrganizerPage({ game, wallets, flash, fail }) {
 
   // Resolve
   const [resolvePick, setResolvePick] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
+  // Which category (if any) the organizer is changing after a wrong pick.
+  const [changing, setChanging] = useState(null);
 
   // Change password
   const [newPw, setNewPw] = useState('');
@@ -477,12 +479,15 @@ function OrganizerPage({ game, wallets, flash, fail }) {
   const resolve = async (key) => {
     const num = parseInt(resolvePick[key], 10);
     if (!num) return fail(new Error('Pick a player first'));
+    const wasResolved = !!game.resolutions?.[key];
     await run(async () => {
       const { resolution } = (await api.resolveCategory(key, num)).data;
+      setChanging(null);
+      const verb = wasResolved ? 'changed' : 'resolved';
       if (resolution.winners.length === 0) {
-        flash(`${CATEGORIES.find((c) => c.key === key).label}: nobody picked #${num} — the ${money(resolution.potCents)} pot rolls over.`);
+        flash(`${CATEGORIES.find((c) => c.key === key).label} ${verb} — nobody picked #${num}, so the ${money(resolution.potCents)} pot rolls over.`);
       } else {
-        flash(`${CATEGORIES.find((c) => c.key === key).label} resolved — ${resolution.winners.length} winner(s), ${money(resolution.potCents)} pot.`);
+        flash(`${CATEGORIES.find((c) => c.key === key).label} ${verb} — ${resolution.winners.length} winner(s), ${money(resolution.potCents)} pot.`);
       }
     });
   };
@@ -662,7 +667,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
             return (
               <div key={key} className="resolve-row">
                 <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)}
-                {res ? (
+                {res && changing !== key ? (
                   <span>
                     {' '}→ #{res.playerNumber} {res.playerName} ·{' '}
                     {res.winners.length === 0 ? (
@@ -670,6 +675,8 @@ function OrganizerPage({ game, wallets, flash, fail }) {
                     ) : (
                       <span>{res.winners.length} winner(s), {money(res.potCents)} pot</span>
                     )}
+                    {' '}
+                    <button className="ghost" onClick={() => { setResolvePick({ ...resolvePick, [key]: String(res.playerNumber) }); setChanging(key); }}>Change</button>
                   </span>
                 ) : (
                   <span className="row">
@@ -679,7 +686,8 @@ function OrganizerPage({ game, wallets, flash, fail }) {
                         <option key={p.number} value={p.number}>#{p.number} {p.name}</option>
                       ))}
                     </select>
-                    <button onClick={() => resolve(key)} disabled={busy}>Resolve {label}</button>
+                    <button onClick={() => resolve(key)} disabled={busy}>{res ? `Update ${label}` : `Resolve ${label}`}</button>
+                    {res && <button className="ghost" onClick={() => setChanging(null)}>Cancel</button>}
                   </span>
                 )}
               </div>
