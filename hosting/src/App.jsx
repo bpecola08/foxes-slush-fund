@@ -570,14 +570,16 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         </div>
       )}
 
-      {(game.slushPayments || []).length > 0 && (
-        <div className="card">
-          <h2>Paid to Amanda</h2>
-          {(game.slushPayments || []).map((p, i) => (
+      <div className="card">
+        <h2>Paid to Amanda</h2>
+        {(game.slushPayments || []).length > 0 ? (
+          (game.slushPayments || []).map((p, i) => (
             <div key={i}>{money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}</div>
-          ))}
-        </div>
-      )}
+          ))
+        ) : (
+          <p className="muted">No payments to Amanda yet.</p>
+        )}
+      </div>
 
       <div className="card danger-zone">
         <h2>Factory reset</h2>
