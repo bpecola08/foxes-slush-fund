@@ -581,7 +581,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
       await api.setDrawMode(drawMode);
       flash(
         drawMode === 'mixed'
-          ? 'Draw mode set — parents pick virtual or real chips per ticket.'
+          ? 'Draw mode set — parents pick virtual or real chips per play.'
           : drawMode === 'physical'
             ? 'Draw mode set — this game uses real chips only.'
             : 'Draw mode set — this game uses the virtual draw only.'
@@ -670,7 +670,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
             ? 'Now: virtual draw only — parents tap the face-down cards in the app.'
             : drawMode === 'physical'
               ? 'Now: real chips only — parents draw a chip from the bag, then tap the player they got.'
-              : 'Now: parents pick virtual or real chips per ticket.'}
+              : 'Now: parents pick virtual or real chips per play.'}
         </p>
       </div>
 
@@ -1208,7 +1208,7 @@ function GameLogPage({ log }) {
                     </div>
                   ))}
                 </div>
-                <h4>Tickets ({entry.tickets?.length || 0})</h4>
+                <h4>Plays ({entry.tickets?.length || 0})</h4>
                 {(entry.tickets || []).map((t) => (
                   <div key={t.id} className="ticket">
                     <div className="ticket-head">
