@@ -28,6 +28,22 @@ const CATEGORIES = [
   { key: 'playmaker', label: 'Playmaker' },
 ];
 
+// Show a parent's full name. The stored bettor is often just a first name
+// ("Lauren", "Tim") — the family's last name comes from the roster entry for
+// the bettor's family (familyId = the kid's jersey number). A name that
+// already has a last name ("Trish Adair") and the "Grandparents" group are
+// left alone. Family 22 ("Liam") has no last name in the roster — its parents
+// already carry full names, so nothing is appended there.
+function fullName(buyer, familyId) {
+  if (!buyer) return buyer;
+  if (buyer === 'Grandparents') return buyer;
+  if (String(buyer).trim().includes(' ')) return buyer; // already a full name
+  const entry = ROSTER.find((p) => String(p.number) === String(familyId));
+  if (!entry || entry.name === 'Liam') return buyer;
+  const last = entry.name.split(' ').pop(); // 'H. Boyle' -> 'Boyle', 'Iannini' -> 'Iannini'
+  return `${buyer} ${last}`;
+}
+
 // The goalies (#29 H. Boyle, #88 Ifft). Who can be picked depends on the
 // starting goalie: the goalie in net cannot score (out of First Goal only),
 // Harrison does not skate out so he is out of every category when he is the
@@ -89,7 +105,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
   return (
     <div className="ticket">
       <div className="ticket-head">
-        <strong>{ticket.bettor || ticket.buyer}</strong>
+        <strong>{fullName(ticket.bettor || ticket.buyer, ticket.familyId)}</strong>
         <span className="muted">{ticket.familyLabel}</span>
         <span className="muted small">{ticket.mode === 'physical' ? '🪙 real chip' : '🎲 virtual'}</span>
         {ticket.payLater && <span className="badge warn">Play now pay later</span>}
@@ -240,7 +256,7 @@ function Landing({ game, log, onGo, onInit }) {
           <span key={i}>
             {i > 0 && ', '}
             <span className={w.buyer === 'Grandparents' ? 'winner-grandparent' : 'winner-parent'}>
-              {w.buyer}
+              {fullName(w.buyer, w.familyId)}
             </span>
             {' '}({money(w.payoutCents)})
           </span>
@@ -730,7 +746,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
               {allWinners.map((w, i) => (
                 <div key={`${w.category}-${w.ticketId}-${i}`} className="payout-summary-row">
                   <div className="payout-summary-line">
-                    <span><strong>{w.buyer}</strong> — {w.categoryLabel}</span>
+                    <span><strong>{fullName(w.buyer, w.familyId)}</strong> — {w.categoryLabel}</span>
                     <span><strong>{money(w.payoutCents)}</strong> <PayoutBadge disposition={w.disposition} /></span>
                   </div>
                   <div className="payout-btns">
@@ -931,7 +947,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
       <h3>Who&apos;s betting?</h3>
       <div className="row">
         {members.map((m) => (
-          <button key={m} className={bettor === m ? 'primary' : ''} onClick={() => pickBettor(m)}>{m}</button>
+          <button key={m} className={bettor === m ? 'primary' : ''} onClick={() => pickBettor(m)}>{fullName(m, wallet.familyId)}</button>
         ))}
       </div>
       <label>
@@ -946,7 +962,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
       </label>
       {familyTickets.length > 0 && (
         <p className="muted small">
-          Bets from this family: {familyTickets.map((t) => t.bettor || t.buyer).join(', ')}
+          Bets from this family: {familyTickets.map((t) => fullName(t.bettor || t.buyer, t.familyId)).join(', ')}
         </p>
       )}
 
@@ -1064,7 +1080,7 @@ function picksByCategory(game, key) {
     if (!byNumber.has(pick.number)) {
       byNumber.set(pick.number, { number: pick.number, name: pick.name, bettors: [] });
     }
-    byNumber.get(pick.number).bettors.push(bettor);
+    byNumber.get(pick.number).bettors.push(fullName(bettor, t.familyId));
   });
   return [...byNumber.values()].sort((a, b) => a.number - b.number);
 }
@@ -1193,7 +1209,7 @@ function GameLogPage({ log }) {
                 {(entry.tickets || []).map((t) => (
                   <div key={t.id} className="ticket">
                     <div className="ticket-head">
-                      <strong>{t.bettor || t.buyer}</strong>
+                      <strong>{fullName(t.bettor || t.buyer, t.familyId)}</strong>
                       <span className="muted">{t.familyLabel}</span>
                       <span className="price">{money(t.paidCents)}</span>
                     </div>
