@@ -71,6 +71,7 @@ export const api = {
   payAmanda: () => post('payAmanda', withPassword()),
   exportBackup: () => post('backup', withPassword({ action: 'export' })),
   restoreBackup: (backup) => post('backup', withPassword({ action: 'restore', backup })),
+  importLog: (entries) => post('backup', withPassword({ action: 'importLog', entries })),
   factoryReset: () => post('factoryReset', withPassword()),
   changeOrganizerPassword: (newPassword) =>
     post('organizer', withPassword({ action: 'changePassword', newPassword })),
