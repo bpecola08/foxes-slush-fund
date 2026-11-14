@@ -599,6 +599,42 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  // Download the whole season as one backup file: wallets, the current
+  // game, slush, payments to Amanda, and the full Game Log.
+  const downloadBackup = async () => {
+    await run(async () => {
+      const { backup } = (await api.exportBackup()).data;
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `foxes-slush-backup-${todayStr()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      flash(`Backup downloaded — ${backup.log.length} game(s) in the log, ${Object.keys(backup.wallets).length} wallets, slush owed ${money(backup.slushCents)}. Keep the file somewhere safe.`);
+    });
+  };
+
+  // Restore a backup file: replaces everything in the app with the file's
+  // contents. The organizer password is not part of a backup.
+  const restoreBackup = async (file) => {
+    if (!file) return;
+    let backup;
+    try {
+      backup = JSON.parse(await file.text());
+    } catch {
+      return fail(new Error('That file could not be read as a backup.'));
+    }
+    if (!window.confirm('RESTORE this backup? It replaces EVERYTHING in the app right now — wallets, the current game, slush, and the whole Game Log — with what is in the file.')) return;
+    if (!window.confirm('Really sure? Download a backup of the current data first if you might want it back.')) return;
+    await run(async () => {
+      const out = (await api.restoreBackup(backup)).data;
+      flash(`Backup restored — ${out.gamesRestored} game(s) in the log, ${out.walletsRestored} wallets, slush owed ${money(out.slushCents)}.`);
+    });
+  };
+
   const payAmanda = async () => {
     if (!game.slushCents || game.slushCents <= 0) return;
     if (!window.confirm(`Send ${money(game.slushCents)} to Amanda? This marks the slush as paid and resets the amount owed to $0.`)) return;
@@ -845,6 +881,26 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         ) : (
           <p className="muted">No payments to Amanda yet.</p>
         )}
+      </div>
+
+      <div className="card">
+        <h2>Backup &amp; restore</h2>
+        <p className="muted small">Download a backup of the whole season — every wallet, the current game, slush, payments to Amanda, and the full Game Log — as one file. If the app ever gets wiped, restore the file here and everything comes back. The organizer password is never part of a backup.</p>
+        <p>
+          <button className="primary" onClick={downloadBackup} disabled={busy}>Download backup</button>
+        </p>
+        <h3>Restore from a backup file</h3>
+        <p className="muted small">Restoring replaces everything in the app right now with the file&apos;s contents. Download a backup of the current data first if you might want it back.</p>
+        <input
+          type="file"
+          accept="application/json,.json"
+          disabled={busy}
+          onChange={(e) => {
+            const f = e.target.files && e.target.files[0];
+            e.target.value = '';
+            restoreBackup(f);
+          }}
+        />
       </div>
 
       <div className="card danger-zone">

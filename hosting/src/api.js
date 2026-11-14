@@ -69,6 +69,8 @@ export const api = {
     post('resolve', withPassword({ action: 'setPayout', category, ticketId, disposition })),
   resetGame: () => post('resetGame', withPassword()),
   payAmanda: () => post('payAmanda', withPassword()),
+  exportBackup: () => post('backup', withPassword({ action: 'export' })),
+  restoreBackup: (backup) => post('backup', withPassword({ action: 'restore', backup })),
   factoryReset: () => post('factoryReset', withPassword()),
   changeOrganizerPassword: (newPassword) =>
     post('organizer', withPassword({ action: 'changePassword', newPassword })),
