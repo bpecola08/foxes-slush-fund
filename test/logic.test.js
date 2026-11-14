@@ -7,7 +7,7 @@ const logic = require('../lib/logic');
 const { hashPassword, verifyPassword } = require('../lib/auth');
 
 const { createInitialState, deposit, buyTicket, resolveCategory, setPayout,
-  resetGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setCarryover, setGameInfo, payAmanda, setDrawMode, setScratched } = logic;
+  resetGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setCarryover, setGameInfo, payAmanda, setDrawMode, setScratched, buildBackup, applyBackup } = logic;
 
 // Deterministic RNG (LCG) so shuffles are reproducible in tests.
 function seededRng(seed = 42) {
@@ -735,6 +735,50 @@ test('scratches clear on reset — they belong to one game only', () => {
   resetGame(s);
   assert.deepEqual(s.game.scratched, []);
   assert.equal(s.log[0].scratched[0], 24); // ...but the finished game remembers who was out
+});
+
+// ---------------------------------------------------------------------------
+// Backup and restore
+// ---------------------------------------------------------------------------
+
+test('backup round-trip: export then restore brings back wallets, slush, the open game and the log', () => {
+  const s = createInitialState();
+  deposit(s, '22', 2000);
+  deposit(s, '9', 500);
+  openGame(s, { gameDate: '2026-11-14', opponent: 'Johnstown', startingGoalie: 29, scratched: [24], rng: seededRng(41) });
+  buyFullTicket(s, '22', 'Trish');
+  const pastGame = {
+    id: 'log-1', gameDate: '2026-11-07', opponent: 'SHAHA', startingGoalie: 88,
+    tickets: [], resolutions: { firstGoal: null, firstPenalty: null, playmaker: null },
+    rollovers: { firstGoal: 0, firstPenalty: 0, playmaker: 0 },
+    slushGameCents: 300, slushSeasonCents: 300, endedAt: '2026-11-07T00:00:00.000Z',
+  };
+  const backup = buildBackup(s, [pastGame]);
+  assert.equal(backup.app, 'foxes-slush-fund');
+
+  const fresh = createInitialState();
+  const out = applyBackup(fresh, JSON.parse(JSON.stringify(backup)));
+  assert.equal(fresh.wallets['22'].balanceCents, 1400); // $20 in, $6 play
+  assert.equal(fresh.wallets['9'].balanceCents, 500);
+  assert.equal(fresh.slushCents, s.slushCents);
+  assert.equal(fresh.game.phase, 'open');
+  assert.equal(fresh.game.opponent, 'Johnstown');
+  assert.deepEqual(fresh.game.scratched, [24]);
+  assert.equal(fresh.tickets.length, 1);
+  assert.deepEqual(fresh.game.decks, s.game.decks); // decks restored card-for-card
+  assert.equal(out.summary.gamesRestored, 1);
+  assert.equal(out.summary.walletsRestored, 15);
+  assert.equal(out.logEntries[0].opponent, 'SHAHA');
+});
+
+test('applyBackup rejects files that are not Foxes backups and changes nothing', () => {
+  const s = createInitialState();
+  deposit(s, '22', 700);
+  assert.throws(() => applyBackup(s, null), /not a backup/);
+  assert.throws(() => applyBackup(s, { app: 'something-else', wallets: {}, log: [], game: {} }), /not a Foxes Slush Fund backup/);
+  assert.throws(() => applyBackup(s, { app: 'foxes-slush-fund', wallets: {}, log: [], game: {} }), /no wallets/);
+  assert.throws(() => applyBackup(s, { app: 'foxes-slush-fund', wallets: { 22: { balanceCents: 1.5 } }, log: [], game: {} }), /no valid balance/);
+  assert.equal(s.wallets['22'].balanceCents, 700); // untouched by the failed restores
 });
 
 // ---------------------------------------------------------------------------
