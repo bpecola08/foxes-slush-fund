@@ -44,6 +44,9 @@ label { display: block; margin: 6px 0; }
 .category-picks h4 { margin: 0 0 6px; }
 .pick-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid #dddddd; }
 .pick-row.winner { background: #ffeef0; }
+.past-game { border: 2px solid; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.past-game-new { border-color: #c8102e; background: #fff5f5; }
+.past-game-old { border-color: #111111; background: #f5f5f5; }
 .payout-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px; padding: 6px 0; border-top: 1px dashed #e5e5e5; }
 .payout-btns button { padding: 6px 10px; font-size: 0.85rem; }
 .pots { display: grid; gap: 4px; margin: 8px 0; }

@@ -255,8 +255,10 @@ function Landing({ game, log, onGo, onInit }) {
       {log && log.length > 0 && (
         <div>
           <h3>Past games — winners &amp; slush</h3>
-          {log.map((entry) => (
-            <div key={entry.id} className="pot">
+          {/* Only the last two games: the log is newest-first, so slice(0, 2).
+              Each game gets its own outline color so the two are easy to tell apart. */}
+          {log.slice(0, 2).map((entry, i) => (
+            <div key={entry.id} className={`pot past-game ${i === 0 ? 'past-game-new' : 'past-game-old'}`}>
               <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)}
               {CATEGORIES.map(({ key, label }) => (
                 <div key={key}>
@@ -266,6 +268,9 @@ function Landing({ game, log, onGo, onInit }) {
               <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>
             </div>
           ))}
+          {log.length > 2 && (
+            <p className="muted small">Showing the last 2 games — older games are in the Game Log.</p>
+          )}
         </div>
       )}
       {game && (
