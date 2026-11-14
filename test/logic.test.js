@@ -7,7 +7,7 @@ const logic = require('../lib/logic');
 const { hashPassword, verifyPassword } = require('../lib/auth');
 
 const { createInitialState, deposit, buyTicket, resolveCategory, setPayout,
-  resetGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setCarryover, setGameInfo, payAmanda, setDrawMode, setScratched, buildBackup, applyBackup } = logic;
+  resetGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setCarryover, setGameInfo, payAmanda, setDrawMode, setScratched, buildBackup, applyBackup, validateImportEntries } = logic;
 
 // Deterministic RNG (LCG) so shuffles are reproducible in tests.
 function seededRng(seed = 42) {
@@ -779,6 +779,35 @@ test('applyBackup rejects files that are not Foxes backups and changes nothing',
   assert.throws(() => applyBackup(s, { app: 'foxes-slush-fund', wallets: {}, log: [], game: {} }), /no wallets/);
   assert.throws(() => applyBackup(s, { app: 'foxes-slush-fund', wallets: { 22: { balanceCents: 1.5 } }, log: [], game: {} }), /no valid balance/);
   assert.equal(s.wallets['22'].balanceCents, 700); // untouched by the failed restores
+});
+
+test('validateImportEntries cleans a dashboard-style game and fills defaults', () => {
+  const [e] = validateImportEntries([{
+    gameDate: '2026-10-25', opponent: 'New Jersey Colonials', imported: true,
+    pots: { firstGoal: 1200, firstPenalty: 1200, playmaker: 12700 },
+    resolutions: {
+      firstGoal: { playerNumber: 22, potCents: 1200, winners: [{ buyer: 'Cheryl', family: 'Cheryl & Mike', familyId: '19', payoutCents: 1200, disposition: 'paid' }] },
+      firstPenalty: null,
+      playmaker: { playerNumber: 58, potCents: 12700, winners: [{ buyer: 'Jeffrey', familyId: 58, payoutCents: 12700 }] },
+    },
+    rollovers: { firstGoal: 0, firstPenalty: 1200, playmaker: 0 },
+  }]);
+  assert.equal(e.opponent, 'New Jersey Colonials');
+  assert.equal(e.startingGoalie, null); // not recorded in the old dashboard
+  assert.equal(e.drawMode, 'physical');
+  assert.equal(e.resolutions.firstGoal.playerName, 'Liam'); // roster name for #22
+  assert.equal(e.resolutions.playmaker.winners[0].familyId, '58'); // stringified
+  assert.equal(e.resolutions.playmaker.winners[0].disposition, 'paid'); // default
+  assert.equal(e.resolutions.firstPenalty, null);
+  assert.equal(e.slushGameCents, 0);
+  assert.equal(e.imported, true);
+});
+
+test('validateImportEntries rejects malformed games', () => {
+  assert.throws(() => validateImportEntries([]), /no games/);
+  assert.throws(() => validateImportEntries([{ gameDate: '10/25/2026', opponent: 'X' }]), /bad date/);
+  assert.throws(() => validateImportEntries([{ gameDate: '2026-10-25', opponent: 'X', resolutions: { firstGoal: { playerNumber: 999, winners: [] } } }]), /malformed/);
+  assert.throws(() => validateImportEntries([{ gameDate: '2026-10-25', opponent: 'X', pots: { firstGoal: -5 } }]), /valid amount/);
 });
 
 // ---------------------------------------------------------------------------
