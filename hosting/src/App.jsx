@@ -836,9 +836,6 @@ function Board({ game, flash, fail }) {
             No game in progress — the last game&apos;s winners are in the Game Log, not here.
           </p>
         )}
-        <p className="muted">
-          Season slush owed to Amanda: <strong>{money(game.slushCents)}</strong>
-        </p>
         <div className="pots">
           {CATEGORIES.map(({ key, label }) => {
             const res = game.resolutions?.[key];
