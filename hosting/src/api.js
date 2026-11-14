@@ -45,26 +45,26 @@ async function post(name, payload = {}) {
 }
 
 export const api = {
-  organizerLogin: (password) => post('organizerLogin', { password }),
+  organizerLogin: (password) => post('organizer', { action: 'login', password }),
   initApp: () => post('initApp', withPassword()),
   deposit: (familyId, amountCents) =>
     post('deposit', withPassword({ familyId, amountCents })),
   buyTicket: (familyId, bettor, picks) => post('buyTicket', { familyId, bettor, picks }),
   setGameInfo: (gameDate, opponent) =>
-    post('setGameInfo', withPassword({ gameDate, opponent })),
+    post('game', withPassword({ action: 'setInfo', gameDate, opponent })),
   setCarryover: (category, amountCents) =>
-    post('setCarryover', withPassword({ category, amountCents })),
+    post('game', withPassword({ action: 'setCarryover', category, amountCents })),
   openGame: (gameDate, opponent, startingGoalie) =>
-    post('openGame', withPassword({ gameDate, opponent, startingGoalie })),
+    post('game', withPassword({ action: 'open', gameDate, opponent, startingGoalie })),
   resolveCategory: (category, playerNumber) =>
-    post('resolveCategory', withPassword({ category, playerNumber })),
+    post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
   setPayout: (category, ticketId, disposition) =>
-    post('setPayout', withPassword({ category, ticketId, disposition })),
+    post('resolve', withPassword({ action: 'setPayout', category, ticketId, disposition })),
   resetGame: () => post('resetGame', withPassword()),
   payAmanda: () => post('payAmanda', withPassword()),
   factoryReset: () => post('factoryReset', withPassword()),
   changeOrganizerPassword: (newPassword) =>
-    post('changeOrganizerPassword', withPassword({ newPassword })),
+    post('organizer', withPassword({ action: 'changePassword', newPassword })),
 };
 
 // Live listeners (read-only — Firestore rules deny client writes).
