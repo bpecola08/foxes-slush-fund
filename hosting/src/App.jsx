@@ -28,6 +28,10 @@ const CATEGORIES = [
   { key: 'playmaker', label: 'Playmaker' },
 ];
 
+// The goalies (#29 H. Boyle, #88 Ifft) are not in the First Goal draw —
+// a goalie does not score — so First Goal is skaters only.
+const GOALIES = [29, 88];
+
 const money = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) =>
@@ -403,6 +407,15 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  // One-time fix for a game opened before goalies left the First Goal draw:
+  // drops any goalie cards from the open game's First Goal deck.
+  const rebuildFirstGoalDeck = async () => {
+    await run(async () => {
+      const { removed, remaining } = (await api.rebuildFirstGoalDeck()).data;
+      flash(`First Goal deck fixed — removed ${removed} goalie card(s), ${remaining} skaters left.`);
+    });
+  };
+
   const deposit = async () => {
     const dollars = parseFloat(depAmount);
     if (!depFamily || Number.isNaN(dollars) || dollars <= 0) return fail(new Error('Pick a family and enter an amount over $0'));
@@ -551,6 +564,13 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           <label>Date <input type="date" value={gameDate} onChange={(e) => setGameDate(e.target.value)} /></label>
           <label>Opponent <input type="text" value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
+          {(game.deckCounts?.firstGoal || 0) > 14 && (
+            <div>
+              <h3>First Goal deck</h3>
+              <p className="muted small">This game was opened before goalies left the First Goal draw. Tap to remove the goalie cards from the First Goal deck.</p>
+              <button className="ghost" onClick={rebuildFirstGoalDeck} disabled={busy}>Remove goalies from First Goal</button>
+            </div>
+          )}
           <h3>Close the draft</h3>
           <p className="muted small">Once the real game starts, close the draft so no more tickets can be bought. You can still resolve the game after it ends.</p>
           <button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button>
@@ -636,7 +656,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
                   <span className="row">
                     <select value={resolvePick[key]} onChange={(e) => setResolvePick({ ...resolvePick, [key]: e.target.value })}>
                       <option value="">Who scored / took it? …</option>
-                      {ROSTER.map((p) => (
+                      {ROSTER.filter((p) => key !== 'firstGoal' || !GOALIES.includes(p.number)).map((p) => (
                         <option key={p.number} value={p.number}>#{p.number} {p.name}</option>
                       ))}
                     </select>
@@ -882,7 +902,8 @@ function ParentPortal({ game, wallets, flash, fail }) {
             const count = game.deckCounts?.[key] ?? 0;
             if (effectiveMode === 'physical') {
               const taken = new Set((game.tickets || []).map((t) => t.picks?.[key]?.number).filter((n) => n != null));
-              const available = ROSTER.filter((p) => !taken.has(p.number));
+              // First Goal is skaters only — the goalies are not in that draw.
+              const available = ROSTER.filter((p) => !taken.has(p.number) && (key !== 'firstGoal' || !GOALIES.includes(p.number)));
               return (
                 <div key={key} className="draft-cat">
                   <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {available.length} chips left
