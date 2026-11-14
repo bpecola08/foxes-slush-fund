@@ -28,9 +28,19 @@ const CATEGORIES = [
   { key: 'playmaker', label: 'Playmaker' },
 ];
 
-// The goalies (#29 H. Boyle, #88 Ifft) are not in the First Goal draw —
-// a goalie does not score — so First Goal is skaters only.
+// The goalies (#29 H. Boyle, #88 Ifft). Who can be picked depends on the
+// starting goalie: the goalie in net cannot score (out of First Goal only),
+// Harrison does not skate out so he is out of every category when he is the
+// backup, and Luke plays as a skater when Harrison is in net so he is in
+// all three categories then.
 const GOALIES = [29, 88];
+
+// Who can be picked for a category, given the starting goalie.
+function inDraw(number, category, startingGoalie) {
+  if (number === 29 && startingGoalie !== 29) return false; // Harrison is out when he is the backup
+  if (category === 'firstGoal' && number === startingGoalie) return false; // goalie in net cannot score
+  return true;
+}
 
 const money = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -82,6 +92,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
         <strong>{ticket.bettor || ticket.buyer}</strong>
         <span className="muted">{ticket.familyLabel}</span>
         <span className="muted small">{ticket.mode === 'physical' ? '🪙 real chip' : '🎲 virtual'}</span>
+        {ticket.payLater && <span className="badge warn">Play now pay later</span>}
         <span className="price">{money(ticket.paidCents)}</span>
       </div>
       <div className="picks">
@@ -407,12 +418,12 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
-  // One-time fix for a game opened before goalies left the First Goal draw:
-  // drops any goalie cards from the open game's First Goal deck.
-  const rebuildFirstGoalDeck = async () => {
+  // One-time fix for a game opened before a deck rule changed: rebuilds all
+  // three decks from the current starting goalie, keeping drawn cards out.
+  const rebuildDecks = async () => {
     await run(async () => {
-      const { removed, remaining } = (await api.rebuildFirstGoalDeck()).data;
-      flash(`First Goal deck fixed — removed ${removed} goalie card(s), ${remaining} skaters left.`);
+      const out = (await api.rebuildDecks()).data;
+      flash(`Decks fixed — First Goal ${out.firstGoal.after} left, First Penalty ${out.firstPenalty.after} left, Playmaker ${out.playmaker.after} left.`);
     });
   };
 
@@ -564,13 +575,11 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           <label>Date <input type="date" value={gameDate} onChange={(e) => setGameDate(e.target.value)} /></label>
           <label>Opponent <input type="text" value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
-          {(game.deckCounts?.firstGoal || 0) > 14 && (
-            <div>
-              <h3>First Goal deck</h3>
-              <p className="muted small">This game was opened before goalies left the First Goal draw. Tap to remove the goalie cards from the First Goal deck.</p>
-              <button className="ghost" onClick={rebuildFirstGoalDeck} disabled={busy}>Remove goalies from First Goal</button>
-            </div>
-          )}
+          <div>
+            <h3>Fix the decks</h3>
+            <p className="muted small">If this game was opened before a deck rule changed, tap to rebuild the decks from the starting goalie. Cards already drawn stay drawn.</p>
+            <button className="ghost" onClick={rebuildDecks} disabled={busy}>Fix the decks</button>
+          </div>
           <h3>Close the draft</h3>
           <p className="muted small">Once the real game starts, close the draft so no more tickets can be bought. You can still resolve the game after it ends.</p>
           <button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button>
@@ -618,7 +627,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         <div className="wallet-grid">
           {wallets.map((w) => (
             <div key={w.familyId} className="wallet-chip">
-              {w.familyLabel}: <strong>{money(w.balanceCents)}</strong>{' '}
+              {w.familyLabel}: <strong className={w.balanceCents < 0 ? 'negative' : ''}>{money(w.balanceCents)}</strong>{w.balanceCents < 0 ? ' — owes' : ''}{' '}
               <button className="ghost" onClick={() => quickDeposit(w.familyId, 6)} disabled={busy}>+$6</button>{' '}
               <button className="ghost" onClick={() => quickDeposit(w.familyId, 10)} disabled={busy}>+$10</button>{' '}
               <button className="ghost" onClick={() => quickDeposit(w.familyId, 20)} disabled={busy}>+$20</button>{' '}
@@ -656,7 +665,7 @@ function OrganizerPage({ game, wallets, flash, fail }) {
                   <span className="row">
                     <select value={resolvePick[key]} onChange={(e) => setResolvePick({ ...resolvePick, [key]: e.target.value })}>
                       <option value="">Who scored / took it? …</option>
-                      {ROSTER.filter((p) => key !== 'firstGoal' || !GOALIES.includes(p.number)).map((p) => (
+                      {ROSTER.filter((p) => inDraw(p.number, key, game.startingGoalie)).map((p) => (
                         <option key={p.number} value={p.number}>#{p.number} {p.name}</option>
                       ))}
                     </select>
@@ -789,7 +798,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
   const familyTickets = (game?.tickets || []).filter((t) => t.familyId === wallet?.familyId);
   const myTicket = familyTickets.find((t) => (t.bettor || t.buyer) === bettor);
 
-  const buy = async () => {
+  const buy = async (payLater = false) => {
     if (!bettor) return fail(new Error('Pick who is betting first.'));
     const picks = { ...selected };
     const count = CATEGORIES.filter((c) => picks[c.key] !== null).length;
@@ -800,10 +809,12 @@ function ParentPortal({ game, wallets, flash, fail }) {
     }
     setBusy(true);
     try {
-      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, effectiveMode)).data;
+      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, effectiveMode, payLater)).data;
       setLastTicket(ticket);
       setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
-      flash(`Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
+      flash(payLater
+        ? `Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} on Play now pay later. Good luck!`
+        : `Ticket bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}. Good luck!`);
     } catch (e) {
       fail(e);
     } finally {
@@ -902,8 +913,9 @@ function ParentPortal({ game, wallets, flash, fail }) {
             const count = game.deckCounts?.[key] ?? 0;
             if (effectiveMode === 'physical') {
               const taken = new Set((game.tickets || []).map((t) => t.picks?.[key]?.number).filter((n) => n != null));
-              // First Goal is skaters only — the goalies are not in that draw.
-              const available = ROSTER.filter((p) => !taken.has(p.number) && (key !== 'firstGoal' || !GOALIES.includes(p.number)));
+              // Who can be picked: the goalie in net is out of First Goal
+              // only, and Harrison is out of everything when he is the backup.
+              const available = ROSTER.filter((p) => !taken.has(p.number) && inDraw(p.number, key, game.startingGoalie));
               return (
                 <div key={key} className="draft-cat">
                   <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {available.length} chips left
@@ -951,12 +963,17 @@ function ParentPortal({ game, wallets, flash, fail }) {
             );
           })}
           <p>
-            <button className="primary" onClick={buy} disabled={busy || selectedCount === 0}>
+            <button className="primary" onClick={() => buy(false)} disabled={busy || selectedCount === 0}>
               Buy ticket for {bettor} — ${price}.00
             </button>
           </p>
           {wallet.balanceCents < price * 100 && (
-            <p className="warn">Your wallet doesn’t cover ${price}.00 — ask the organizer to top it up.</p>
+            <p>
+              <button className="ghost" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
+                Play now pay later — ${price}.00
+              </button>
+              <span className="muted small"> Your wallet is short — this ticket goes through and the balance goes negative until you pay the organizer.</span>
+            </p>
           )}
         </div>
       )}

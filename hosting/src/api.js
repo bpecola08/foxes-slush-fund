@@ -49,7 +49,7 @@ export const api = {
   initApp: () => post('initApp', withPassword()),
   deposit: (familyId, amountCents) =>
     post('deposit', withPassword({ familyId, amountCents })),
-  buyTicket: (familyId, bettor, picks, mode) => post('buyTicket', { familyId, bettor, picks, mode }),
+  buyTicket: (familyId, bettor, picks, mode, payLater) => post('buyTicket', { familyId, bettor, picks, mode, payLater }),
   setGameInfo: (gameDate, opponent) =>
     post('game', withPassword({ action: 'setInfo', gameDate, opponent })),
   setCarryover: (category, amountCents) =>
@@ -60,7 +60,7 @@ export const api = {
     post('game', withPassword({ action: 'open', gameDate, opponent, startingGoalie })),
   closeDraft: () => post('game', withPassword({ action: 'closeDraft' })),
   reopenDraft: () => post('game', withPassword({ action: 'reopenDraft' })),
-  rebuildFirstGoalDeck: () => post('game', withPassword({ action: 'rebuildFirstGoalDeck' })),
+  rebuildDecks: () => post('game', withPassword({ action: 'rebuildDecks' })),
   resolveCategory: (category, playerNumber) =>
     post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
   setPayout: (category, ticketId, disposition) =>
