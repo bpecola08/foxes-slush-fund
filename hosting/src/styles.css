@@ -12,6 +12,7 @@ button.primary { background: #c8102e; font-weight: 700; }
 button.ghost { background: transparent; color: #111111; border: 1px solid #111111; }
 button.danger { background: #7f0000; }
 button.parent-hero { display: block; width: 100%; font-size: 1.3rem; font-weight: 800; padding: 16px; margin: 12px 0; }
+.slush-total { font-size: 1.25rem; font-weight: 800; color: #c8102e; margin: 8px 0; }
 input, select { padding: 8px 10px; border: 1px solid #cccccc; border-radius: 8px; margin: 4px 6px 4px 0; font-size: 0.95rem; max-width: 100%; }
 label { display: block; margin: 6px 0; }
 .row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }

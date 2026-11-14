@@ -176,6 +176,19 @@ export default function App() {
 function Landing({ game, log, onGo, onInit }) {
   const potFor = (key) =>
     (game?.phase === 'open' ? game.pots?.[key] : game?.carryover?.[key]) || 0;
+  const seasonSlush = game
+    ? game.slushCents || 0
+    : log && log[0]
+      ? log[0].slushSeasonCents || 0
+      : 0;
+  const winnerText = (res) => {
+    if (!res) return 'Not decided yet';
+    if (!res.winners || res.winners.length === 0)
+      return `#${res.playerNumber} ${res.playerName} — nobody picked it (rolled over)`;
+    return `#${res.playerNumber} ${res.playerName} — ${res.winners
+      .map((w) => `${w.buyer} (${money(w.payoutCents)})`)
+      .join(', ')}`;
+  };
   return (
     <div className="card">
       <h2>Welcome</h2>
@@ -184,11 +197,10 @@ function Landing({ game, log, onGo, onInit }) {
           {game.phase === 'open' ? (
             <>
               📅 {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} ·{' '}
-              <strong>{game.tickets?.length || 0} tickets sold</strong> · Slush (season):{' '}
-              <strong>{money(game.slushCents)}</strong>
+              <strong>{game.tickets?.length || 0} tickets sold</strong>
             </>
           ) : (
-            <>No game open yet — the draft hasn&apos;t started. Slush (season): <strong>{money(game.slushCents)}</strong></>
+            <>No game open yet — the draft hasn&apos;t started.</>
           )}
         </p>
       ) : (
@@ -196,6 +208,7 @@ function Landing({ game, log, onGo, onInit }) {
           The app hasn&apos;t been set up yet. The organizer signs in once and taps “Seed the app” below.
         </p>
       )}
+      <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)} (owed to Amanda)</p>
       <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
       <div className="menu">
         <button onClick={() => onGo('organizer')}>Organizer Page</button>
@@ -207,18 +220,31 @@ function Landing({ game, log, onGo, onInit }) {
           <h3>Pots{game.phase === 'open' ? ' — this game' : ' — next game (starting amounts)'}</h3>
           <div className="pots">
             {CATEGORIES.map(({ key, label }) => (
-              <div key={key} className="pot"><strong>{label}</strong>: {money(potFor(key))}</div>
+              <div key={key} className="pot">
+                <strong>{label}</strong>: {money(potFor(key))}
+                {game.phase === 'open' && (
+                  <span> · Winner: {winnerText(game.resolutions?.[key])}</span>
+                )}
+              </div>
             ))}
           </div>
+          {game.phase === 'open' && (
+            <p>Slush from this game: <strong>{money(game.slushGameCents || 0)}</strong></p>
+          )}
         </div>
       )}
       {log && log.length > 0 && (
         <div>
-          <h3>Pots — past games</h3>
+          <h3>Past games — winners &amp; slush</h3>
           {log.map((entry) => (
             <div key={entry.id} className="pot">
-              <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)} —{' '}
-              {CATEGORIES.map(({ key, label }) => `${label} ${money(entry.pots?.[key] || 0)}`).join(' · ')}
+              <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)}
+              {CATEGORIES.map(({ key, label }) => (
+                <div key={key}>
+                  <strong>{label}</strong>: {money(entry.pots?.[key] || 0)} · Winner: {winnerText(entry.resolutions?.[key])}
+                </div>
+              ))}
+              <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>
             </div>
           ))}
         </div>
