@@ -193,8 +193,9 @@ async function withState(mutator) {
     const out = mutator(state, gameId);
     result = out && out.result !== undefined ? out.result : out;
     // Firestore requires every read to happen before every write, so the
-    // game-log read for deleteLog must come before the saveState writes.
-    const logSnap = out && out.deleteLog
+    // game-log read for deleteLog / replaceLog must come before the
+    // saveState writes.
+    const logSnap = out && (out.deleteLog || out.replaceLog)
       ? await tx.get(firestore.collection('gamelog'))
       : null;
     saveState(firestore, tx, state, out && out.nextGameId ? out.nextGameId : gameId);
@@ -204,6 +205,15 @@ async function withState(mutator) {
     }
     if (logSnap) {
       for (const doc of logSnap.docs) tx.delete(doc.ref);
+    }
+    if (out && out.replaceLog) {
+      // Restore: write the backup's log entries back, keeping their ids.
+      for (const entry of out.replaceLog) {
+        const ref = typeof entry.id === 'string' && entry.id
+          ? firestore.collection('gamelog').doc(entry.id)
+          : firestore.collection('gamelog').doc();
+        tx.set(ref, { ...entry, id: ref.id });
+      }
     }
   });
   return result;
