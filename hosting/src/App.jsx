@@ -176,7 +176,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>🏒 Foxes Slush Fund Draft</h1>
+        <h1>🏒 Foxes BY16 Slush Game</h1>
         <p className="muted">Arctic Foxes 10U — $2 per category · half to the pot, half to the slush fund</p>
       </header>
 
