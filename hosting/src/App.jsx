@@ -472,33 +472,6 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         <button className="ghost" onClick={() => { clearOrganizerPassword(); window.location.reload(); }}>Sign out</button>
       </div>
 
-      <div className="card">
-        <h2>Send to Amanda</h2>
-        <p>Season slush owed to Amanda: <strong>{money(game.slushCents)}</strong></p>
-        {game.slushCents > 0 ? (
-          <button className="primary" onClick={payAmanda} disabled={busy}>Send {money(game.slushCents)} to Amanda</button>
-        ) : (
-          <p className="muted">Nothing owed right now.</p>
-        )}
-      </div>
-
-      <div className="card">
-        <h2>Draw mode</h2>
-        <p className="muted small">Pick how this game&apos;s draft runs. Parents only get the option you set here.</p>
-        <div className="row">
-          <button className={drawMode === 'virtual' ? 'primary' : ''} onClick={() => setDrawMode('virtual')} disabled={busy}>🎲 Virtual draw</button>
-          <button className={drawMode === 'physical' ? 'primary' : ''} onClick={() => setDrawMode('physical')} disabled={busy}>🪙 Real chips</button>
-          <button className={drawMode === 'mixed' ? 'primary' : ''} onClick={() => setDrawMode('mixed')} disabled={busy}>Let parents choose</button>
-        </div>
-        <p className="muted small">
-          {drawMode === 'virtual'
-            ? 'Now: virtual draw only — parents tap the face-down cards in the app.'
-            : drawMode === 'physical'
-              ? 'Now: real chips only — parents draw a chip from the bag, then tap the player they got.'
-              : 'Now: parents pick virtual or real chips per ticket.'}
-        </p>
-      </div>
-
       {game.phase === 'setup' && (
         <div className="card">
           <h2>Start a New Game</h2>
@@ -511,8 +484,8 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           <label><input type="radio" name="goalie" checked={goalie === 29} onChange={() => setGoalie(29)} /> #29 H. Boyle</label>
           <label><input type="radio" name="goalie" checked={goalie === 88} onChange={() => setGoalie(88)} /> #88 Ifft</label>
 
-          <h3>Step 3 — Starting pots</h3>
-          <p className="muted small">Rolled-over pots fill in automatically. Edit them here if the real amount is different.</p>
+          <h3>Step 3 — Rollover</h3>
+          <p className="muted small">These are the pots rolling over from the last game — they fill in automatically. Edit them here if the real amount is different.</p>
           {CATEGORIES.map(({ key, label }) => (
             <div key={key} className="row">
               <label>{label} <input type="number" min="0" step="0.01" value={potInputs[key]} onChange={(e) => setPotInputs({ ...potInputs, [key]: e.target.value })} /></label>
@@ -533,6 +506,23 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
         </div>
       )}
+
+      <div className="card">
+        <h2>Draw mode</h2>
+        <p className="muted small">Pick how this game&apos;s draft runs. Parents only get the option you set here.</p>
+        <div className="row">
+          <button className={drawMode === 'virtual' ? 'primary' : ''} onClick={() => setDrawMode('virtual')} disabled={busy}>🎲 Virtual draw</button>
+          <button className={drawMode === 'physical' ? 'primary' : ''} onClick={() => setDrawMode('physical')} disabled={busy}>🪙 Real chips</button>
+          <button className={drawMode === 'mixed' ? 'primary' : ''} onClick={() => setDrawMode('mixed')} disabled={busy}>Let parents choose</button>
+        </div>
+        <p className="muted small">
+          {drawMode === 'virtual'
+            ? 'Now: virtual draw only — parents tap the face-down cards in the app.'
+            : drawMode === 'physical'
+              ? 'Now: real chips only — parents draw a chip from the bag, then tap the player they got.'
+              : 'Now: parents pick virtual or real chips per ticket.'}
+        </p>
+      </div>
 
       <div className="card">
         <h2>Bank Manager — deposits</h2>
@@ -599,6 +589,16 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           <button className="primary" onClick={reset} disabled={busy}>Reset Game — save to log &amp; start fresh</button>
         </div>
       )}
+
+      <div className="card">
+        <h2>Send to Amanda</h2>
+        <p>Season slush owed to Amanda: <strong>{money(game.slushCents)}</strong></p>
+        {game.slushCents > 0 ? (
+          <button className="primary" onClick={payAmanda} disabled={busy}>Send {money(game.slushCents)} to Amanda</button>
+        ) : (
+          <p className="muted">Nothing owed right now.</p>
+        )}
+      </div>
 
       <div className="card">
         <h2>Paid to Amanda</h2>
