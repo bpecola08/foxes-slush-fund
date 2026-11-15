@@ -398,6 +398,11 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [gameDate, setGameDate] = useState(todayStr());
   const [opponent, setOpponent] = useState('');
   const [goalie, setGoalie] = useState(88);
+  // Change-goalie fix for an open game: which goalie the organizer has
+  // picked in the fix card (null = follow the game's current goalie), and
+  // the tap-again arm for its save button.
+  const [goaliePick, setGoaliePick] = useState(null);
+  const [goalieArm, setGoalieArm] = useState(false);
   const [potInputs, setPotInputs] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
 
   // Bank manager
@@ -563,6 +568,48 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       flash(`Decks fixed — First Goal ${out.firstGoal.after} left, First Penalty ${out.firstPenalty.after} left, Playmaker ${out.playmaker.after} left.`);
     });
   };
+
+  // Fix a wrong starting-goalie pick on an open game: the decks rebuild
+  // around the new goalie; plays already sold stay as they are (any that no
+  // longer fit are named in the warning). Two-step confirm, like Fix the
+  // books — native confirm() dialogs don't work in the automated browser.
+  const changeGoalie = async () => {
+    const target = goaliePick ?? game.startingGoalie;
+    if (!goalieArm) {
+      setGoalieArm(true);
+      flash(`Check, then tap again to confirm: starting goalie becomes #${target}. The decks rebuild around him — plays already sold stay as they are.`);
+      return;
+    }
+    setGoalieArm(false);
+    await run(async () => {
+      const out = (await api.setStartingGoalie(target)).data;
+      setGoaliePick(null);
+      let msg = `Starting goalie changed to #${out.startingGoalie} — First Goal ${out.decks.firstGoal.after} cards, First Penalty ${out.decks.firstPenalty.after}, Playmaker ${out.decks.playmaker.after}.`;
+      if (out.conflicts && out.conflicts.length) {
+        const label = (n) => `#${n} ${ROSTER.find((p) => p.number === n)?.name || ''}`;
+        const catLabel = (k) => CATEGORIES.find((c) => c.key === k)?.label || k;
+        msg += ` Warning — sold picks that no longer fit (they stay as they are): ${out.conflicts.map((c) => `${c.bettor} has ${label(c.playerNumber)} in ${catLabel(c.category)}`).join('; ')}.`;
+      }
+      flash(msg);
+    });
+  };
+
+  // Shared by the open and closed cards: the change-goalie fix block.
+  const goalieSel = goaliePick ?? game?.startingGoalie;
+  const goalieFixBlock = game ? (
+    <div>
+      <h3>Starting goalie</h3>
+      <p className="muted small">Opened with the wrong goalie? Change him here — the decks rebuild around the new goalie. Plays already sold stay as they are.</p>
+      <label><input type="radio" name="goalie-fix" checked={goalieSel === 29} onChange={() => { setGoaliePick(29); setGoalieArm(false); }} /> #29 H. Boyle</label>
+      <label><input type="radio" name="goalie-fix" checked={goalieSel === 88} onChange={() => { setGoaliePick(88); setGoalieArm(false); }} /> #88 Ifft</label>
+      <p>
+        <button className="ghost" onClick={changeGoalie} disabled={busy || goalieSel === game.startingGoalie}>
+          {goalieArm ? 'Tap again to confirm' : 'Change goalie & rebuild decks'}
+        </button>{' '}
+        <span className="muted small">Now: #{game.startingGoalie} in net.</span>
+      </p>
+    </div>
+  ) : null;
 
   const toggleScratch = (n) =>
     setScratchSel((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
@@ -900,6 +947,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <label>Date <input type="date" value={gameDate} onChange={(e) => setGameDate(e.target.value)} /></label>
           <label>Opponent <input type="text" value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
+          {goalieFixBlock}
           <div>
             <h3>Fix the decks</h3>
             <p className="muted small">If this game was opened before a deck rule changed, tap to rebuild the decks from the starting goalie. Cards already drawn stay drawn.</p>
@@ -916,6 +964,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <h2>Draft closed — game in progress</h2>
           <p className="muted">No more plays can be bought. Resolve the game below once it ends, or reopen the draft if you closed it early.</p>
           <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button>
+          {goalieFixBlock}
         </div>
       )}
 
