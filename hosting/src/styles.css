@@ -45,6 +45,9 @@ label { display: block; margin: 6px 0; }
 .pick-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid #dddddd; }
 .standings-panel { border: 1px solid #e5e5e5; border-radius: 10px; padding: 10px 12px; margin: 12px 0; }
 .standings-panel.foxes { background: #fdeef0; border-color: #dfa0a8; }
+.reveal-spin { display: inline-block; min-width: 10ch; font-weight: 700; color: #c8102e; }
+.reveal-pop { display: inline-block; font-weight: 800; animation: reveal-pop .35s ease-out; }
+@keyframes reveal-pop { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
 .standings-panel h3 { margin-top: 4px; }
 .pick-row.crowned { background: #f8ccd2; border-radius: 6px; padding-left: 6px; padding-right: 6px; }
 .pick-row.winner { background: #ffeef0; }
