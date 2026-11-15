@@ -305,7 +305,7 @@ function Landing({ game, log, onGo, onInit }) {
   // button; once the game is over it drops back below Past games.
   const gameActive = !!game && (game.phase === 'open' || game.phase === 'closed');
   const potsBlock = game ? (
-    <div className="standings-panel foxes">
+    <div>
       <h3>Pots{gameActive ? ' — this game' : ' — next game (starting amounts)'}</h3>
       <div className="pots">
         {CATEGORIES.map(({ key, label }) => (
@@ -353,7 +353,7 @@ function Landing({ game, log, onGo, onInit }) {
       <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
       {gameActive && potsBlock}
       {log && log.length > 0 && (
-        <div className="standings-panel past-panel">
+        <div>
           <h3>Past games — winners &amp; slush</h3>
           {log.length > 2 && (
             <p className="muted small">Showing the last 2 games — older games are in the Game Log.</p>
