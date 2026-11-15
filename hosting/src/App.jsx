@@ -301,6 +301,27 @@ function Landing({ game, log, onGo, onInit }) {
       </>
     );
   };
+  // The Pots block: while a game is active it sits up under the Game Log
+  // button; once the game is over it drops back below Past games.
+  const gameActive = !!game && (game.phase === 'open' || game.phase === 'closed');
+  const potsBlock = game ? (
+    <div>
+      <h3>Pots{gameActive ? ' — this game' : ' — next game (starting amounts)'}</h3>
+      <div className="pots">
+        {CATEGORIES.map(({ key, label }) => (
+          <div key={key} className="pot">
+            <strong>{label}</strong>: {money(potFor(key))}
+            {gameActive && (
+              <span> · Winner: {winnerText(game.resolutions?.[key], false)}</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {gameActive && (
+        <p>Slush from this game: <strong>{money(game.slushGameCents || 0)}</strong></p>
+      )}
+    </div>
+  ) : null;
   return (
     <div className="card">
       <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
@@ -330,6 +351,7 @@ function Landing({ game, log, onGo, onInit }) {
       </button>
       <button className="nav-hero" onClick={() => onGo('season')}>🏆 Season standings</button>
       <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
+      {gameActive && potsBlock}
       {log && log.length > 0 && (
         <div>
           <h3>Past games — winners &amp; slush</h3>
@@ -353,24 +375,7 @@ function Landing({ game, log, onGo, onInit }) {
           ))}
         </div>
       )}
-      {game && (
-        <div>
-          <h3>Pots{(game.phase === 'open' || game.phase === 'closed') ? ' — this game' : ' — next game (starting amounts)'}</h3>
-          <div className="pots">
-            {CATEGORIES.map(({ key, label }) => (
-              <div key={key} className="pot">
-                <strong>{label}</strong>: {money(potFor(key))}
-                {(game.phase === 'open' || game.phase === 'closed') && (
-                  <span> · Winner: {winnerText(game.resolutions?.[key], false)}</span>
-                )}
-              </div>
-            ))}
-          </div>
-          {(game.phase === 'open' || game.phase === 'closed') && (
-            <p>Slush from this game: <strong>{money(game.slushGameCents || 0)}</strong></p>
-          )}
-        </div>
-      )}
+      {!gameActive && potsBlock}
       <button className="nav-hero" onClick={() => onGo('organizer')}>Organizer Page</button>
       {!game && (
         <p>
