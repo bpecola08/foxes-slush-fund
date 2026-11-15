@@ -1785,7 +1785,7 @@ function SeasonPage({ game, log, wallets }) {
         )}
       </div>
 
-      <div className="standings-panel gold">
+      <div className="standings-panel foxes">
         <h3>Winning players — by category</h3>
         {CATEGORIES.map(({ key, label }) => (
           <div key={key}>
