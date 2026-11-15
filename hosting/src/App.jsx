@@ -303,6 +303,7 @@ function Landing({ game, log, onGo, onInit }) {
   };
   return (
     <div className="card">
+      <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
       {game ? (
         <p>
           {game.phase === 'open' || game.phase === 'closed' ? (
