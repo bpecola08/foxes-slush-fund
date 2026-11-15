@@ -126,7 +126,7 @@ function PayoutBadge({ disposition }) {
   return <span className="badge unmarked">Not paid yet</span>;
 }
 
-function TicketCard({ ticket, game, showPayouts, onPayout }) {
+function TicketCard({ ticket, game, showPayouts, onPayout, odds }) {
   const winnersFor = (cat) => {
     const res = game?.resolutions?.[cat];
     if (!res) return null;
@@ -146,11 +146,15 @@ function TicketCard({ ticket, game, showPayouts, onPayout }) {
           const pick = ticket.picks?.[key];
           const res = game?.resolutions?.[key];
           const isWinner = res && pick && res.playerNumber === pick.number;
+          const w = odds && pick ? odds.wins[key].get(pick.number) || 0 : null;
           return (
             <div key={key} className={`pick ${isWinner ? 'winner' : ''}`}>
               <span className="muted">{label}:</span>{' '}
               {pick ? `#${pick.number} ${pick.name}` : '—'}
               {isWinner && <span className="win-star"> ★ Winner</span>}
+              {w !== null && (
+                <span className="muted small"> · {oddsPct(w, odds.games)}% · {w} win{w === 1 ? '' : 's'} this season</span>
+              )}
             </div>
           );
         })}
@@ -1353,7 +1357,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
       ) : myTicket || lastTicket ? (
         <div>
           <h3>{bettor}&apos;s play</h3>
-          <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} />
+          <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} odds={odds} />
           <p className="muted small">One play per person per game — tap another name above to buy for someone else in the family.</p>
         </div>
       ) : (
