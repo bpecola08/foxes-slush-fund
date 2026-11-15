@@ -1665,6 +1665,23 @@ function SeasonPage({ game, log, wallets }) {
   const topPeople = [...people.values()]
     .filter((p) => p.wins > 0)
     .sort((a, b) => b.wonCents - a.wonCents || b.wins - a.wins || a.buyer.localeCompare(b.buyer));
+
+  // Which PLAYERS won each category (the kid who scored / took the penalty /
+  // made the play), counted across every logged game — including games where
+  // the pot rolled because nobody picked them. For the parents to see.
+  const playerWins = {};
+  for (const { key } of CATEGORIES) {
+    const byPlayer = new Map();
+    for (const src of sources) {
+      const res = src.resolutions ? src.resolutions[key] : null;
+      if (!res || !res.playerNumber) continue;
+      const cur = byPlayer.get(res.playerNumber) || { number: res.playerNumber, name: res.playerName || '', wins: 0 };
+      cur.wins += 1;
+      if (res.playerName && !cur.name) cur.name = res.playerName;
+      byPlayer.set(res.playerNumber, cur);
+    }
+    playerWins[key] = [...byPlayer.values()].sort((a, b) => b.wins - a.wins || a.number - b.number);
+  }
   return (
     <div className="card">
       <h2>🏆 Season standings</h2>
@@ -1685,6 +1702,23 @@ function SeasonPage({ game, log, wallets }) {
           </div>
         ))
       )}
+
+      <h3>Winning players — by category</h3>
+      {CATEGORIES.map(({ key, label }) => (
+        <div key={key}>
+          <p><strong>{label}</strong></p>
+          {playerWins[key].length === 0 ? (
+            <p className="muted">No winner yet.</p>
+          ) : (
+            playerWins[key].map((r) => (
+              <div key={r.number} className="pick-row">
+                <span>#{r.number} {r.name}</span>
+                <span>{r.wins} win{r.wins === 1 ? '' : 's'}</span>
+              </div>
+            ))
+          )}
+        </div>
+      ))}
 
     </div>
   );
