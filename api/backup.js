@@ -82,6 +82,11 @@ module.exports = handler(async (body) => {
       }),
     }));
   }
+  if (action === 'setWallets') {
+    return db.withState((state) => ({
+      result: logic.setWalletBalances(state, body.balances),
+    }));
+  }
   if (action === 'fixLogGame') {
     const { gameDate, opponent, category, disposition } = body || {};
     if (typeof gameDate !== 'string' || !gameDate || typeof opponent !== 'string' || !opponent) {
