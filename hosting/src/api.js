@@ -70,6 +70,7 @@ export const api = {
   setPayout: (category, ticketId, disposition) =>
     post('resolve', withPassword({ action: 'setPayout', category, ticketId, disposition })),
   resetGame: () => post('game', withPassword({ action: 'resetGame' })),
+  voidGame: () => post('game', withPassword({ action: 'voidGame' })),
   payAmanda: () => post('game', withPassword({ action: 'payAmanda' })),
   exportBackup: () => post('backup', withPassword({ action: 'export' })),
   restoreBackup: (backup) => post('backup', withPassword({ action: 'restore', backup })),
