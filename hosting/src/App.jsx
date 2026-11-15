@@ -392,6 +392,9 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [fixSeasonSlush, setFixSeasonSlush] = useState('');
   const [fixBalances, setFixBalances] = useState({});
   const [fixBalancesInit, setFixBalancesInit] = useState(false);
+  // Two-step in-page confirm for the Fix-the-books saves (no native
+  // confirm() — some browsers swallow it): first tap arms, second tap saves.
+  const [fixArmed, setFixArmed] = useState('');
 
   useEffect(() => {
     if (game) {
@@ -694,6 +697,22 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       await doImport(entries);
     });
   };
+  // The full pick lists for the 12 older dashboard games (everyone's chip
+  // picks, pulled from the dashboard's dated chip pages) — fills in who
+  // picked what so the season standings count every play, not just today's.
+  const loadPickLists = async () => {
+    await run(async () => {
+      const res = await fetch('/dashboard-tickets.json');
+      if (!res.ok) throw new Error('Could not load the pick lists file.');
+      const data = await res.json();
+      const games = Array.isArray(data) ? data : data.games;
+      if (!Array.isArray(games) || games.length === 0) throw new Error('The pick lists file is empty.');
+      const r = await api.setLogTickets(games);
+      flash(r && r.skipped && r.skipped.length
+        ? `Pick lists loaded for ${r.updated} games. Skipped: ${r.skipped.join(', ')}`
+        : `Pick lists loaded for ${r.updated} games — the season standings now count every play.`);
+    });
+  };
 
   // Fix the books: correct the season slush position — money that moved
   // outside the app (e.g. cash handed to Amanda before the app tracked it).
@@ -703,7 +722,12 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     if (!Number.isFinite(sentCents) || !Number.isFinite(owedCents) || sentCents < 0 || owedCents < 0) {
       return fail(new Error('Slush amounts must be $0 or more.'));
     }
-    if (!window.confirm(`Set the slush numbers to: ${money(sentCents)} already sent to Amanda, ${money(owedCents)} still owed? The home-page running total becomes ${money(sentCents + owedCents)}.`)) return;
+    if (fixArmed !== 'slush') {
+      setFixArmed('slush');
+      flash(`Check, then tap "Save slush numbers" again to confirm: ${money(sentCents)} already sent to Amanda, ${money(owedCents)} still owed — the home-page running total becomes ${money(sentCents + owedCents)}.`);
+      return;
+    }
+    setFixArmed('');
     await run(async () => {
       await api.setSlush(owedCents, sentCents);
       flash(`Slush corrected — ${money(sentCents)} sent to Amanda, ${money(owedCents)} still owed.`);
@@ -721,7 +745,13 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   };
   const flipWinner = async (entry, category, winner, disposition) => {
     const label = disposition === 'rolled' ? 'rolled into their account' : 'paid';
-    if (!window.confirm(`Mark ${winner.buyer}'s ${money(winner.payoutCents)} win vs ${entry.opponent} as ${label}? Their family wallet ${disposition === 'rolled' ? 'gains' : 'loses'} ${money(winner.payoutCents)}.`)) return;
+    const armKey = `flip:${category}:${winner.buyer}`;
+    if (fixArmed !== armKey) {
+      setFixArmed(armKey);
+      flash(`Check, then tap the same button again to confirm: ${winner.buyer}'s ${money(winner.payoutCents)} win vs ${entry.opponent} marked ${label} — their family wallet ${disposition === 'rolled' ? 'gains' : 'loses'} ${money(winner.payoutCents)}.`);
+      return;
+    }
+    setFixArmed('');
     await run(async () => {
       await api.fixLogGame({ gameDate: entry.gameDate, opponent: entry.opponent, category, disposition });
       flash(`${winner.buyer}'s win vs ${entry.opponent} marked ${label}.`);
@@ -749,7 +779,12 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       balances[w.familyId] = cents;
     }
     if (!Object.keys(balances).length) return fail(new Error('No balances to save.'));
-    if (!window.confirm(`Set ${Object.keys(balances).length} wallet balance(s) to exactly the amounts shown? This replaces the current balances.`)) return;
+    if (fixArmed !== 'wallets') {
+      setFixArmed('wallets');
+      flash(`Check, then tap "Save all balances" again to confirm: set ${Object.keys(balances).length} wallet balance(s) to exactly the amounts shown, replacing the current balances.`);
+      return;
+    }
+    setFixArmed('');
     await run(async () => {
       const out = (await api.setWallets(balances)).data;
       flash(`${out.updated} wallet balance(s) set.`);
@@ -1010,7 +1045,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
         <h3>Season slush</h3>
         <label>Already sent to Amanda, all season $ <input type="number" min="0" step="0.01" value={fixSent} onChange={(e) => setFixSent(e.target.value)} /></label>
         <label>Still owed to Amanda $ <input type="number" min="0" step="0.01" value={fixOwed} onChange={(e) => setFixOwed(e.target.value)} /></label>
-        <p><button className="primary" onClick={saveSlushFix} disabled={busy}>Save slush numbers</button></p>
+        <p><button className="primary" onClick={saveSlushFix} disabled={busy}>{fixArmed === 'slush' ? 'Tap again to confirm' : 'Save slush numbers'}</button></p>
         <h3>A logged game</h3>
         <label>Game{' '}
           <select value={fixKey} onChange={(e) => pickFixGame(e.target.value)}>
@@ -1029,7 +1064,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
                 <p key={`${key}-${i}`} className="small">
                   {label}: <strong>{w.buyer}</strong> — {money(w.payoutCents)} — {w.disposition === 'rolled' ? 'in their account' : 'paid'}{' '}
                   <button className="ghost" disabled={busy} onClick={() => flipWinner(fixEntry, key, w, w.disposition === 'rolled' ? 'paid' : 'rolled')}>
-                    Mark as {w.disposition === 'rolled' ? 'paid' : 'rolled into their account'}
+                    {fixArmed === `flip:${key}:${w.buyer}` ? 'Tap again to confirm' : `Mark as ${w.disposition === 'rolled' ? 'paid' : 'rolled into their account'}`}
                   </button>
                 </p>
               ));
@@ -1044,7 +1079,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
         {wallets.map((w) => (
           <label key={w.familyId} className="small">{w.familyLabel} $ <input type="number" step="0.01" value={fixBalances[w.familyId] ?? ''} onChange={(e) => setFixBalances({ ...fixBalances, [w.familyId]: e.target.value })} /></label>
         ))}
-        <p><button className="primary" onClick={saveWalletFix} disabled={busy}>Save all balances</button></p>
+        <p><button className="primary" onClick={saveWalletFix} disabled={busy}>{fixArmed === 'wallets' ? 'Tap again to confirm' : 'Save all balances'}</button></p>
       </div>
 
       <div className="card">
@@ -1069,6 +1104,10 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
         <p className="muted small">The season&apos;s first 13 games (Aug 30 – Nov 14) from the old pool dashboard are bundled with the app — one tap loads them, no file to handle:</p>
         <p>
           <button className="primary" onClick={loadDashboardGames} disabled={busy}>Load the 13 dashboard games</button>
+        </p>
+        <p className="muted small">Already loaded those games? Add everyone&apos;s chip picks for the 12 older games, so the season standings count every play (winners, pots and balances don&apos;t change; safe to tap more than once):</p>
+        <p>
+          <button className="primary" onClick={loadPickLists} disabled={busy}>Load the pick lists for the 12 older games</button>
         </p>
         <p className="muted small">Or add games from a game-records file. Importing only adds to the Game Log — games already logged are skipped, and wallets, slush and the current game are never touched.</p>
         <input
