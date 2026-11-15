@@ -417,11 +417,6 @@ function Landing({ game, log, onGo, onInit }) {
           <button className="ghost" onClick={onInit}>Seed the app (organizer)</button>
         </p>
       )}
-      <p className="muted small">
-        Parents log in with their kid&apos;s jersey number. The organizer logs in with the
-        organizer password. Winnings are paid out by the organizer — or rolled into the
-        family&apos;s account as credit for future plays.
-      </p>
     </div>
   );
 }
