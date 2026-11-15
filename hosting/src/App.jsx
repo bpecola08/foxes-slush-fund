@@ -321,9 +321,9 @@ function Landing({ game, log, onGo, onInit }) {
           The app hasn&apos;t been set up yet. The organizer signs in once and taps “Seed the app” below.
         </p>
       )}
-      <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
+      <p className="slush-total">👋 Welcome to the Foxes BY16 Slush Game!</p>
       <p className="muted small" style={{ textAlign: 'center' }}>Parents log in with their kid&apos;s jersey number.</p>
-      <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
+      <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal Login</button>
       <button className="nav-hero" onClick={() => onGo('board')}>
         {(game?.phase === 'open' || game?.phase === 'closed')
           ? `Picks for Foxes vs ${game.opponent || 'TBD'}`
@@ -1342,7 +1342,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
   if (!wallet) {
     return (
       <div className="card">
-        <h2>Parent Portal</h2>
+        <h2>Parent Portal Login</h2>
         <p className="muted">Enter your kid’s jersey number to open your family wallet.</p>
         <input type="number" placeholder="Jersey # (e.g. 22)" value={pin} onChange={(e) => setPin(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && login()} />
         <button onClick={login}>Open my wallet</button>
