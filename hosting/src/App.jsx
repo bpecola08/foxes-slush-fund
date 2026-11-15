@@ -780,59 +780,6 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     });
   };
 
-  // Import games into the Game Log from a file (a list of game records,
-  // e.g. older games rebuilt from the old pool dashboard). Add-only:
-  // games already in the log (same date and opponent) are skipped, and
-  // wallets, slush and the current game are never touched.
-  const doImport = async (entries) => {
-    if (!window.confirm(`Import ${entries.length} game(s) into the Game Log? Games already logged (same date and opponent) are skipped. Wallets, slush and the current game are not touched.`)) return;
-    await run(async () => {
-      const out = (await api.importLog(entries)).data;
-      flash(`Imported ${out.imported} game(s) into the Game Log${out.skipped ? ` — ${out.skipped} already there, skipped` : ''}.`);
-    });
-  };
-  const importGames = async (file) => {
-    if (!file) return;
-    let parsed;
-    try {
-      parsed = JSON.parse(await file.text());
-    } catch {
-      return fail(new Error('That file could not be read as game records.'));
-    }
-    const entries = Array.isArray(parsed) ? parsed : parsed.entries || parsed.log;
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return fail(new Error('That file has no games in it.'));
-    }
-    await doImport(entries);
-  };
-  // The season's first 13 games (Aug 30 – Nov 14), rebuilt from the old
-  // pool dashboard and bundled with the app — one tap, no file to handle.
-  const loadDashboardGames = async () => {
-    await run(async () => {
-      const res = await fetch('/dashboard-import.json');
-      if (!res.ok) throw new Error('Could not load the dashboard games file.');
-      const entries = await res.json();
-      if (!Array.isArray(entries) || entries.length === 0) throw new Error('The dashboard games file is empty.');
-      await doImport(entries);
-    });
-  };
-  // The full pick lists for the 12 older dashboard games (everyone's chip
-  // picks, pulled from the dashboard's dated chip pages) — fills in who
-  // picked what so the season standings count every play, not just today's.
-  const loadPickLists = async () => {
-    await run(async () => {
-      const res = await fetch('/dashboard-tickets.json');
-      if (!res.ok) throw new Error('Could not load the pick lists file.');
-      const data = await res.json();
-      const games = Array.isArray(data) ? data : data.games;
-      if (!Array.isArray(games) || games.length === 0) throw new Error('The pick lists file is empty.');
-      const r = (await api.setLogTickets(games)).data || {};
-      flash(r.skipped && r.skipped.length
-        ? `Pick lists loaded for ${r.updated} games. Skipped: ${r.skipped.join(', ')}`
-        : `Pick lists loaded for ${r.updated} games — the season standings now count every play.`);
-    });
-  };
-
   // Fix the books: correct the season slush position — money that moved
   // outside the app (e.g. cash handed to Amanda before the app tracked it).
   const saveSlushFix = async () => {
@@ -1231,26 +1178,6 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
             const f = e.target.files && e.target.files[0];
             e.target.value = '';
             restoreBackup(f);
-          }}
-        />
-        <h3>Import games into the Game Log</h3>
-        <p className="muted small">The season&apos;s first 13 games (Aug 30 – Nov 14) from the old pool dashboard are bundled with the app — one tap loads them, no file to handle:</p>
-        <p>
-          <button className="primary" onClick={loadDashboardGames} disabled={busy}>Load the 13 dashboard games</button>
-        </p>
-        <p className="muted small">Already loaded those games? Add everyone&apos;s chip picks for the 12 older games, so the season standings count every play (winners, pots and balances don&apos;t change; safe to tap more than once):</p>
-        <p>
-          <button className="primary" onClick={loadPickLists} disabled={busy}>Load the pick lists for the 12 older games</button>
-        </p>
-        <p className="muted small">Or add games from a game-records file. Importing only adds to the Game Log — games already logged are skipped, and wallets, slush and the current game are never touched.</p>
-        <input
-          type="file"
-          accept="application/json,.json"
-          disabled={busy}
-          onChange={(e) => {
-            const f = e.target.files && e.target.files[0];
-            e.target.value = '';
-            importGames(f);
           }}
         />
       </div>
