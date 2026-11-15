@@ -329,8 +329,8 @@ function Landing({ game, log, onGo, onInit }) {
           ? `Picks for Foxes vs ${game.opponent || 'TBD'}`
           : 'Picks & winners'}
       </button>
-      <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
       <button className="nav-hero" onClick={() => onGo('season')}>🏆 Season standings</button>
+      <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
       {log && log.length > 0 && (
         <div>
           <h3>Past games — winners &amp; slush</h3>
