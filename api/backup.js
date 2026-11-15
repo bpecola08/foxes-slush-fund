@@ -87,6 +87,64 @@ module.exports = handler(async (body) => {
       result: logic.setWalletBalances(state, body.balances),
     }));
   }
+  if (action === 'setLogTickets') {
+    // { games: [{ gameDate, opponent, tickets, winnerTickets? }] } -> { updated, skipped }
+    // Fills in the plays (who picked what) for games already in the log —
+    // e.g. older games whose winners were imported before their pick lists
+    // were pulled from the old dashboard. Replaces only each game's plays
+    // and links each winner to their play; winners, pots, wallets and slush
+    // are never touched, so re-running it is safe.
+    const games = Array.isArray(body.games) ? body.games : [];
+    if (!games.length || games.length > 20) throw new Error('No games supplied.');
+    const FAMILY_IDS = new Set(['9', '16', '17', '19', '20', '22', '23', '24', '29', '55', '58', '88', '94', '96', '98']);
+    for (const g of games) {
+      if (!g || typeof g.gameDate !== 'string' || !g.gameDate || typeof g.opponent !== 'string' || !g.opponent || !Array.isArray(g.tickets)) {
+        throw new Error('Each game needs a date, an opponent and a plays list.');
+      }
+      for (const t of g.tickets) {
+        if (!t || typeof t.id !== 'string' || typeof t.buyer !== 'string' || !FAMILY_IDS.has(t.familyId) || !t.picks || typeof t.picks !== 'object') {
+          throw new Error(`A play in the ${g.opponent} game is malformed.`);
+        }
+        for (const c of logic.CATEGORIES) {
+          const v = t.picks[c];
+          if (v !== null && v !== undefined && (!Number.isInteger(v) || v < 1 || v > 99)) {
+            throw new Error(`A pick in the ${g.opponent} game is malformed.`);
+          }
+        }
+        if (![200, 400, 600].includes(t.paidCents)) {
+          throw new Error(`A play price in the ${g.opponent} game is malformed.`);
+        }
+      }
+    }
+    const firestore = db.db();
+    const snap = await firestore.collection('gamelog').get();
+    const byKey = new Map();
+    snap.forEach((d) => { const e = d.data(); byKey.set(`${e.gameDate}|${e.opponent}`, { ref: d.ref, entry: e }); });
+    const batch = firestore.batch();
+    let updated = 0;
+    const skipped = [];
+    for (const g of games) {
+      const hit = byKey.get(`${g.gameDate}|${g.opponent}`);
+      if (!hit) { skipped.push(`${g.gameDate} ${g.opponent}`); continue; }
+      const update = { tickets: g.tickets };
+      if (g.winnerTickets && typeof g.winnerTickets === 'object') {
+        const resolutions = JSON.parse(JSON.stringify(hit.entry.resolutions || {}));
+        let touched = false;
+        for (const c of logic.CATEGORIES) {
+          const tid = g.winnerTickets[c];
+          if (tid && resolutions[c] && Array.isArray(resolutions[c].winners) && resolutions[c].winners[0]) {
+            resolutions[c].winners[0] = { ...resolutions[c].winners[0], ticketId: tid };
+            touched = true;
+          }
+        }
+        if (touched) update.resolutions = resolutions;
+      }
+      batch.update(hit.ref, update);
+      updated += 1;
+    }
+    if (updated) await batch.commit();
+    return { updated, skipped };
+  }
   if (action === 'fixLogGame') {
     const { gameDate, opponent, category, disposition } = body || {};
     if (typeof gameDate !== 'string' || !gameDate || typeof opponent !== 'string' || !opponent) {
