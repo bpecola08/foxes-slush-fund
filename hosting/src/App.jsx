@@ -321,7 +321,6 @@ function Landing({ game, log, onGo, onInit }) {
           The app hasn&apos;t been set up yet. The organizer signs in once and taps “Seed the app” below.
         </p>
       )}
-      <h2 className="slush-total">Welcome</h2>
       <p className="muted small" style={{ textAlign: 'center' }}>Parents log in with their kid&apos;s jersey number.</p>
       <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal Login</button>
       <button className="nav-hero" onClick={() => onGo('board')}>
