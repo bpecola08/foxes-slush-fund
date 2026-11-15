@@ -126,7 +126,35 @@ function PayoutBadge({ disposition }) {
   return <span className="badge unmarked">Not paid yet</span>;
 }
 
-function TicketCard({ ticket, game, showPayouts, onPayout, odds }) {
+// Virtual-draw reveal: cycles player numbers like a slot machine, then
+// lands on the player the server actually drew. The draw is already final
+// when this runs — the animation only unveils it.
+function RevealPick({ pick, delay, suffix }) {
+  const [shown, setShown] = useState(() => ROSTER[Math.floor(Math.random() * ROSTER.length)]);
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const spin = setInterval(() => {
+      setShown(ROSTER[Math.floor(Math.random() * ROSTER.length)]);
+    }, 70);
+    const stop = setTimeout(() => {
+      clearInterval(spin);
+      setSettled(true);
+      try { if (navigator.vibrate) navigator.vibrate(40); } catch { /* no vibrate — fine */ }
+    }, delay);
+    return () => { clearInterval(spin); clearTimeout(stop); };
+  }, [delay]);
+  if (settled) {
+    return (
+      <>
+        <span className="reveal-pop">#{pick.number} {pick.name}</span>
+        {suffix}
+      </>
+    );
+  }
+  return <span className="reveal-spin">#{shown.number} {shown.name}</span>;
+}
+
+function TicketCard({ ticket, game, showPayouts, onPayout, odds, reveal }) {
   const winnersFor = (cat) => {
     const res = game?.resolutions?.[cat];
     if (!res) return null;
@@ -142,18 +170,25 @@ function TicketCard({ ticket, game, showPayouts, onPayout, odds }) {
         <span className="price">Play {money(ticket.paidCents)}</span>
       </div>
       <div className="picks">
-        {CATEGORIES.map(({ key, label }) => {
+        {CATEGORIES.map(({ key, label }, i) => {
           const pick = ticket.picks?.[key];
           const res = game?.resolutions?.[key];
           const isWinner = res && pick && res.playerNumber === pick.number;
           const w = odds && pick ? odds.wins[key].get(pick.number) || 0 : null;
+          const oddsSuffix = w !== null ? (
+            <span className="muted small"> · {oddsPct(w, odds.games)}% · {w} win{w === 1 ? '' : 's'} this season</span>
+          ) : null;
           return (
             <div key={key} className={`pick ${isWinner ? 'winner' : ''}`}>
               <span className="muted">{label}:</span>{' '}
-              {pick ? `#${pick.number} ${pick.name}` : '—'}
-              {isWinner && <span className="win-star"> ★ Winner</span>}
-              {w !== null && (
-                <span className="muted small"> · {oddsPct(w, odds.games)}% · {w} win{w === 1 ? '' : 's'} this season</span>
+              {reveal && pick ? (
+                <RevealPick pick={pick} delay={900 + i * 700} suffix={oddsSuffix} />
+              ) : (
+                <>
+                  {pick ? `#${pick.number} ${pick.name}` : '—'}
+                  {isWinner && <span className="win-star"> ★ Winner</span>}
+                  {oddsSuffix}
+                </>
               )}
             </div>
           );
@@ -1259,6 +1294,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
   const [selected, setSelected] = useState({ firstGoal: null, firstPenalty: null, playmaker: null });
   const [busy, setBusy] = useState(false);
   const [lastTicket, setLastTicket] = useState(null);
+  const [revealId, setRevealId] = useState(null);
   const [bettor, setBettor] = useState('');
   const [otherName, setOtherName] = useState('');
   const [mode, setMode] = useState('virtual'); // 'virtual' (app draws) | 'physical' (real chip from the bag)
@@ -1287,6 +1323,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
     setBettor(name);
     setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
     setLastTicket(null);
+    setRevealId(null);
   };
 
   // Switching draw method clears the picks — a virtual card position is not
@@ -1332,6 +1369,14 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
     try {
       const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, effectiveMode, payLater)).data;
       setLastTicket(ticket);
+      // Virtual draws get the slot-machine reveal on the play card; real-chip
+      // picks were chosen by the parent, so they show as-is.
+      if (effectiveMode === 'virtual') {
+        setRevealId(ticket.id);
+        setTimeout(() => setRevealId(null), 4000);
+      } else {
+        setRevealId(null);
+      }
       setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
       flash(payLater
         ? `Play bought for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} on Play now pay later. Good luck!`
@@ -1410,7 +1455,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
       ) : myTicket || lastTicket ? (
         <div>
           <h3>{bettor}&apos;s play</h3>
-          <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} odds={odds} />
+          <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} odds={odds} reveal={revealId !== null && (myTicket || lastTicket)?.id === revealId} />
           <p className="muted small">One play per person per game — tap another name above to buy for someone else in the family.</p>
         </div>
       ) : (
