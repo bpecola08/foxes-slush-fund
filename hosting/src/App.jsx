@@ -1642,18 +1642,12 @@ function SeasonPage({ game, log, wallets }) {
     }
   }
 
-  const walletById = new Map((wallets || []).map((w) => [String(w.familyId), w.balanceCents]));
   const owing = (wallets || [])
     .filter((w) => (w.balanceCents || 0) < 0)
     .sort((a, b) => a.balanceCents - b.balanceCents);
   const topPeople = [...people.values()]
     .filter((p) => p.wins > 0)
     .sort((a, b) => b.wonCents - a.wonCents || b.wins - a.wins || a.buyer.localeCompare(b.buyer));
-  const families = [...fam.values()]
-    .filter((f) => f.plays > 0 || f.wins > 0)
-    .sort((a, b) => b.wonCents - a.wonCents || (b.wonCents - b.spentCents) - (a.wonCents - a.spentCents) || a.familyLabel.localeCompare(b.familyLabel));
-  const signed = (c) => (c < 0 ? `-${money(-c)}` : money(c));
-
   return (
     <div className="card">
       <h2>🏆 Season standings</h2>
@@ -1687,35 +1681,6 @@ function SeasonPage({ game, log, wallets }) {
         ))
       )}
 
-      <h3>Family totals</h3>
-      {families.length === 0 ? (
-        <p className="muted">No plays yet.</p>
-      ) : (
-        families.map((f) => {
-          const bal = walletById.get(f.familyId);
-          const net = f.wonCents - f.spentCents;
-          return (
-            <div key={f.familyId} className="pick-row">
-              <span>
-                <strong>{f.familyLabel}</strong>
-                <br />
-                <span className="muted small">{f.plays} play{f.plays === 1 ? '' : 's'} · spent {money(f.spentCents)} · won {money(f.wonCents)}</span>
-              </span>
-              <span>
-                Net <strong className={net < 0 ? 'negative' : ''}>{signed(net)}</strong>
-                <br />
-                <span className="muted small">
-                  {bal === undefined
-                    ? 'Wallet —'
-                    : bal < 0
-                      ? <span className="negative">Wallet owes {money(-bal)}</span>
-                      : `Wallet ${money(bal)}`}
-                </span>
-              </span>
-            </div>
-          );
-        })
-      )}
     </div>
   );
 }
