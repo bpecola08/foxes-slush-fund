@@ -61,6 +61,16 @@ function inDraw(number, category, startingGoalie, scratched) {
 }
 
 const money = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
+// How much slush one logged game took in (its payment to Amanda): the slush
+// recorded for the game when there is one, otherwise figured from its plays
+// — $1 of every $2 category pick is slush, so half of what the plays cost.
+// Null when the game has neither recorded slush nor plays to figure from.
+const entrySlush = (entry) => {
+  if (entry.slushGameCents) return entry.slushGameCents;
+  const plays = entry.tickets || [];
+  if (!plays.length) return null;
+  return plays.reduce((a, t) => a + (t.paidCents || 0), 0) / 2;
+};
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) =>
   d ? new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -312,9 +322,9 @@ function Landing({ game, log, onGo, onInit }) {
                   <strong>{label}</strong>: {winnerText(entry.resolutions?.[key], true)}
                 </div>
               ))}
-              {entry.imported
+              {entrySlush(entry) === null
                 ? <div>Slush for this game: <strong>not recorded</strong></div>
-                : <div>Slush for this game: <strong>{money(entry.slushGameCents || 0)}</strong></div>}
+                : <div>Slush for this game: <strong>{money(entrySlush(entry))}</strong></div>}
             </div>
           ))}
           {log.length > 2 && (
@@ -1515,7 +1525,7 @@ function GameLogPage({ log }) {
               <strong>Foxes vs {entry.opponent || 'TBD'}</strong> · {fmtDate(entry.gameDate)}
               {entry.startingGoalie ? <> · Goalie #{entry.startingGoalie}</> : ''}
               {entry.drawMode === 'physical' ? ' · 🪙 Real chips' : entry.drawMode === 'virtual' ? ' · 🎲 Virtual draw' : ''}
-              {entry.imported ? ' · Slush not recorded' : <> · Slush {money(entry.slushGameCents)} (season {money(entry.slushSeasonCents)})</>}
+              {entrySlush(entry) === null ? ' · Slush not recorded' : <> · Slush {money(entrySlush(entry))}</>}
               <span>{open ? ' ▲' : ' ▼'}</span>
             </button>
             {open && (
