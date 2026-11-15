@@ -72,6 +72,9 @@ export const api = {
   exportBackup: () => post('backup', withPassword({ action: 'export' })),
   restoreBackup: (backup) => post('backup', withPassword({ action: 'restore', backup })),
   importLog: (entries) => post('backup', withPassword({ action: 'importLog', entries })),
+  setSlush: (owedCents, sentCents, sentAt) =>
+    post('backup', withPassword({ action: 'setSlush', owedCents, sentCents, sentAt })),
+  fixLogGame: (fix) => post('backup', withPassword({ action: 'fixLogGame', ...fix })),
   factoryReset: () => post('factoryReset', withPassword()),
   changeOrganizerPassword: (newPassword) =>
     post('organizer', withPassword({ action: 'changePassword', newPassword })),

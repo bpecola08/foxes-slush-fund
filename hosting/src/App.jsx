@@ -220,7 +220,7 @@ export default function App() {
           }}
         />
       )}
-      {view === 'organizer' && <OrganizerPage game={game} wallets={walletList} flash={flash} fail={fail} />}
+      {view === 'organizer' && <OrganizerPage game={game} wallets={walletList} log={log} flash={flash} fail={fail} />}
       {view === 'parent' && <ParentPortal game={game} wallets={walletList} flash={flash} fail={fail} />}
       {view === 'board' && <Board game={game} flash={flash} fail={fail} />}
       {view === 'gamelog' && <GameLogPage log={log} />}
@@ -357,7 +357,7 @@ function Landing({ game, log, onGo, onInit }) {
 
 // ---------------------------------------------------------------------------
 
-function OrganizerPage({ game, wallets, flash, fail }) {
+function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [pw, setPw] = useState('');
   const [loggedIn, setLoggedIn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -384,6 +384,13 @@ function OrganizerPage({ game, wallets, flash, fail }) {
   // Change password
   const [newPw, setNewPw] = useState('');
 
+  // Fix the books (corrections for money that moved outside the app)
+  const [fixSent, setFixSent] = useState('');
+  const [fixOwed, setFixOwed] = useState('');
+  const [fixKey, setFixKey] = useState('');
+  const [fixGameSlush, setFixGameSlush] = useState('');
+  const [fixSeasonSlush, setFixSeasonSlush] = useState('');
+
   useEffect(() => {
     if (game) {
       setGameDate(game.gameDate || todayStr());
@@ -394,6 +401,8 @@ function OrganizerPage({ game, wallets, flash, fail }) {
         firstPenalty: game.carryover ? String((game.carryover.firstPenalty || 0) / 100) : '',
         playmaker: game.carryover ? String((game.carryover.playmaker || 0) / 100) : '',
       });
+      setFixSent(String(((game.slushPayments || []).reduce((s, p) => s + (p.amountCents || 0), 0)) / 100));
+      setFixOwed(String((game.slushCents || 0) / 100));
     }
   }, [game?.gameId]);
 
@@ -674,6 +683,51 @@ function OrganizerPage({ game, wallets, flash, fail }) {
     });
   };
 
+  // Fix the books: correct the season slush position — money that moved
+  // outside the app (e.g. cash handed to Amanda before the app tracked it).
+  const saveSlushFix = async () => {
+    const sentCents = Math.round(parseFloat(fixSent || '0') * 100);
+    const owedCents = Math.round(parseFloat(fixOwed || '0') * 100);
+    if (!Number.isFinite(sentCents) || !Number.isFinite(owedCents) || sentCents < 0 || owedCents < 0) {
+      return fail(new Error('Slush amounts must be $0 or more.'));
+    }
+    if (!window.confirm(`Set the slush numbers to: ${money(sentCents)} already sent to Amanda, ${money(owedCents)} still owed? The home-page running total becomes ${money(sentCents + owedCents)}.`)) return;
+    await run(async () => {
+      await api.setSlush(owedCents, sentCents);
+      flash(`Slush corrected — ${money(sentCents)} sent to Amanda, ${money(owedCents)} still owed.`);
+    });
+  };
+
+  // Fix the books: correct one logged game — a winner who was marked paid
+  // but actually rolled (or the reverse), and/or the slush that game took in.
+  const fixEntry = (log || []).find((e) => `${e.gameDate}|${e.opponent}` === fixKey) || null;
+  const pickFixGame = (key) => {
+    setFixKey(key);
+    const e = (log || []).find((x) => `${x.gameDate}|${x.opponent}` === key);
+    setFixGameSlush(e ? String((e.slushGameCents || 0) / 100) : '');
+    setFixSeasonSlush(e ? String((e.slushSeasonCents || 0) / 100) : '');
+  };
+  const flipWinner = async (entry, category, winner, disposition) => {
+    const label = disposition === 'rolled' ? 'rolled into their account' : 'paid';
+    if (!window.confirm(`Mark ${winner.buyer}'s ${money(winner.payoutCents)} win vs ${entry.opponent} as ${label}? Their family wallet ${disposition === 'rolled' ? 'gains' : 'loses'} ${money(winner.payoutCents)}.`)) return;
+    await run(async () => {
+      await api.fixLogGame({ gameDate: entry.gameDate, opponent: entry.opponent, category, disposition });
+      flash(`${winner.buyer}'s win vs ${entry.opponent} marked ${label}.`);
+    });
+  };
+  const saveGameSlushFix = async () => {
+    if (!fixEntry) return;
+    const g = Math.round(parseFloat(fixGameSlush || '0') * 100);
+    const s = Math.round(parseFloat(fixSeasonSlush || '0') * 100);
+    if (!Number.isFinite(g) || !Number.isFinite(s) || g < 0 || s < 0) {
+      return fail(new Error('Slush amounts must be $0 or more.'));
+    }
+    await run(async () => {
+      await api.fixLogGame({ gameDate: fixEntry.gameDate, opponent: fixEntry.opponent, slushGameCents: g, slushSeasonCents: s });
+      flash(`Slush for the ${fixEntry.opponent} game set to ${money(g)} (season ${money(s)}).`);
+    });
+  };
+
   const payAmanda = async () => {
     if (!game.slushCents || game.slushCents <= 0) return;
     if (!window.confirm(`Send ${money(game.slushCents)} to Amanda? This marks the slush as paid and resets the amount owed to $0.`)) return;
@@ -919,6 +973,43 @@ function OrganizerPage({ game, wallets, flash, fail }) {
           ))
         ) : (
           <p className="muted">No payments to Amanda yet.</p>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Fix the books</h2>
+        <p className="muted small">For money that moved outside the app — cash already handed to Amanda, or a winner who rolled instead of taking cash. Corrections here rewrite the recorded numbers to match.</p>
+        <h3>Season slush</h3>
+        <label>Already sent to Amanda, all season $ <input type="number" min="0" step="0.01" value={fixSent} onChange={(e) => setFixSent(e.target.value)} /></label>
+        <label>Still owed to Amanda $ <input type="number" min="0" step="0.01" value={fixOwed} onChange={(e) => setFixOwed(e.target.value)} /></label>
+        <p><button className="primary" onClick={saveSlushFix} disabled={busy}>Save slush numbers</button></p>
+        <h3>A logged game</h3>
+        <label>Game{' '}
+          <select value={fixKey} onChange={(e) => pickFixGame(e.target.value)}>
+            <option value="">Pick a game…</option>
+            {(log || []).map((e) => (
+              <option key={e.id || `${e.gameDate}|${e.opponent}`} value={`${e.gameDate}|${e.opponent}`}>{fmtDate(e.gameDate)} · Foxes vs {e.opponent}</option>
+            ))}
+          </select>
+        </label>
+        {fixEntry && (
+          <div>
+            {CATEGORIES.map(({ key, label }) => {
+              const res = fixEntry.resolutions && fixEntry.resolutions[key];
+              const winners = (res && res.winners) || [];
+              return winners.filter((w) => w && w.buyer).map((w, i) => (
+                <p key={`${key}-${i}`} className="small">
+                  {label}: <strong>{w.buyer}</strong> — {money(w.payoutCents)} — {w.disposition === 'rolled' ? 'in their account' : 'paid'}{' '}
+                  <button className="ghost" disabled={busy} onClick={() => flipWinner(fixEntry, key, w, w.disposition === 'rolled' ? 'paid' : 'rolled')}>
+                    Mark as {w.disposition === 'rolled' ? 'paid' : 'rolled into their account'}
+                  </button>
+                </p>
+              ));
+            })}
+            <label>Slush collected this game $ <input type="number" min="0" step="0.01" value={fixGameSlush} onChange={(e) => setFixGameSlush(e.target.value)} /></label>
+            <label>Season slush total after this game $ <input type="number" min="0" step="0.01" value={fixSeasonSlush} onChange={(e) => setFixSeasonSlush(e.target.value)} /></label>
+            <p><button onClick={saveGameSlushFix} disabled={busy}>Save this game&apos;s slush</button></p>
+          </div>
         )}
       </div>
 
