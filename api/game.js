@@ -1,6 +1,6 @@
 // POST /api/game — { password, action, ... }.
 // Password-gated organizer endpoint for setting up the next game.
-// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'setScratched' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks'.
+// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'setScratched' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks' | 'setStartingGoalie'.
 //   setInfo:      { gameDate, opponent } -> { game }
 //   setCarryover: { category, amountCents } -> { game }
 //   setDrawMode:  { drawMode } -> { game }   ('mixed' | 'virtual' | 'physical')
@@ -9,6 +9,7 @@
 //   closeDraft:   {} -> { game }   (draft closed once the real game starts)
 //   reopenDraft:  {} -> { game }   (undo a close)
 //   rebuildDecks: {} -> { firstGoal: {before, after}, firstPenalty: {...}, playmaker: {...} }   (one-time fix: rebuild the open game's decks from the starting goalie, keeping drawn cards out)
+//   setStartingGoalie: { startingGoalie } -> { startingGoalie, decks, conflicts }   (fix a wrong goalie pick on an open game; decks rebuild, sold plays stay)
 const { handler } = require('./_lib/http');
 const db = require('./_lib/db');
 const logic = require('../lib/logic');
@@ -76,6 +77,13 @@ module.exports = handler(async (body) => {
   if (action === 'rebuildDecks') {
     const out = await db.withState((state) => {
       const r = logic.rebuildDecks(state);
+      return { result: r };
+    });
+    return { ...out };
+  }
+  if (action === 'setStartingGoalie') {
+    const out = await db.withState((state) => {
+      const r = logic.setStartingGoalie(state, body.startingGoalie);
       return { result: r };
     });
     return { ...out };
