@@ -1771,34 +1771,41 @@ function SeasonPage({ game, log, wallets }) {
           : `Added up from ${gamesCount} game${gamesCount === 1 ? '' : 's'}${inProgress ? ', including the game in progress' : ''}.`}
       </p>
 
-      <h3>Top winners — by person</h3>
-      {topPeople.length === 0 ? (
-        <p className="muted">No winners yet.</p>
-      ) : (
-        topPeople.map((p, i) => (
-          <div key={p.key} className="pick-row">
-            <span>{i + 1}. <strong>{fullName(p.buyer, p.familyId)}</strong> <span className="muted">({p.familyLabel})</span></span>
-            <span>{p.wins} win{p.wins === 1 ? '' : 's'} · <strong>{money(p.wonCents)}</strong></span>
-          </div>
-        ))
-      )}
+      <div className="standings-panel">
+        <h3>Top winners — by person</h3>
+        {topPeople.length === 0 ? (
+          <p className="muted">No winners yet.</p>
+        ) : (
+          topPeople.map((p, i) => (
+            <div key={p.key} className="pick-row">
+              <span>{i + 1}. <strong>{fullName(p.buyer, p.familyId)}</strong> <span className="muted">({p.familyLabel})</span></span>
+              <span>{p.wins} win{p.wins === 1 ? '' : 's'} · <strong>{money(p.wonCents)}</strong></span>
+            </div>
+          ))
+        )}
+      </div>
 
-      <h3>Winning players — by category</h3>
-      {CATEGORIES.map(({ key, label }) => (
-        <div key={key}>
-          <p><strong>{label}</strong></p>
-          {playerWins[key].length === 0 ? (
-            <p className="muted">No winner yet.</p>
-          ) : (
-            playerWins[key].map((r) => (
-              <div key={r.number} className="pick-row">
-                <span>#{r.number} {r.name}</span>
-                <span>{r.wins} win{r.wins === 1 ? '' : 's'}</span>
-              </div>
-            ))
-          )}
-        </div>
-      ))}
+      <div className="standings-panel gold">
+        <h3>Winning players — by category</h3>
+        {CATEGORIES.map(({ key, label }) => (
+          <div key={key}>
+            <p><strong>{label}</strong></p>
+            {playerWins[key].length === 0 ? (
+              <p className="muted">No winner yet.</p>
+            ) : (
+              playerWins[key].map((r) => {
+                const crowned = r.wins === playerWins[key][0].wins;
+                return (
+                  <div key={r.number} className={crowned ? 'pick-row crowned' : 'pick-row'}>
+                    <span>{crowned ? '👑 ' : ''}#{r.number} {r.name}</span>
+                    <span>{r.wins} win{r.wins === 1 ? '' : 's'}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ))}
+      </div>
 
     </div>
   );
