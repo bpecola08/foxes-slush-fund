@@ -383,6 +383,12 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [depAmount, setDepAmount] = useState('');
   const [quickAmounts, setQuickAmounts] = useState({});
 
+  // Who owes (negative wallets), biggest debt first. Moved here from the
+  // public Season standings page Nov 14, 2026 — owing money is organizer-only.
+  const owing = (wallets || [])
+    .filter((w) => (w.balanceCents || 0) < 0)
+    .sort((a, b) => a.balanceCents - b.balanceCents);
+
   // Resolve
   const [resolvePick, setResolvePick] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
   // Which category (if any) the organizer is changing after a wrong pick.
@@ -922,6 +928,20 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
               ? 'Now: real chips only — parents draw a chip from the bag, then tap the player they got.'
               : 'Now: parents pick virtual or real chips per play.'}
         </p>
+      </div>
+
+      <div className="card">
+        <h2>Who owes</h2>
+        {owing.length === 0 ? (
+          <p className="muted">Nobody owes anything — every wallet is square. 🎉</p>
+        ) : (
+          owing.map((w) => (
+            <div key={w.familyId} className="pick-row">
+              <span>{w.familyLabel}</span>
+              <span className="negative"><strong>owes {money(-(w.balanceCents || 0))}</strong></span>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="card">
@@ -1642,9 +1662,6 @@ function SeasonPage({ game, log, wallets }) {
     }
   }
 
-  const owing = (wallets || [])
-    .filter((w) => (w.balanceCents || 0) < 0)
-    .sort((a, b) => a.balanceCents - b.balanceCents);
   const topPeople = [...people.values()]
     .filter((p) => p.wins > 0)
     .sort((a, b) => b.wonCents - a.wonCents || b.wins - a.wins || a.buyer.localeCompare(b.buyer));
@@ -1656,18 +1673,6 @@ function SeasonPage({ game, log, wallets }) {
           ? 'No games yet — standings appear after the first game.'
           : `Added up from ${gamesCount} game${gamesCount === 1 ? '' : 's'}${inProgress ? ', including the game in progress' : ''}.`}
       </p>
-
-      <h3>Who owes</h3>
-      {owing.length === 0 ? (
-        <p className="muted">Nobody owes anything — every wallet is square. 🎉</p>
-      ) : (
-        owing.map((w) => (
-          <div key={w.familyId} className="pick-row">
-            <span>{w.familyLabel}</span>
-            <span className="negative"><strong>owes {money(-(w.balanceCents || 0))}</strong></span>
-          </div>
-        ))
-      )}
 
       <h3>Top winners — by person</h3>
       {topPeople.length === 0 ? (
