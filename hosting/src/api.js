@@ -69,8 +69,8 @@ export const api = {
     post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
   setPayout: (category, ticketId, disposition) =>
     post('resolve', withPassword({ action: 'setPayout', category, ticketId, disposition })),
-  resetGame: () => post('resetGame', withPassword()),
-  payAmanda: () => post('payAmanda', withPassword()),
+  resetGame: () => post('game', withPassword({ action: 'resetGame' })),
+  payAmanda: () => post('game', withPassword({ action: 'payAmanda' })),
   exportBackup: () => post('backup', withPassword({ action: 'export' })),
   restoreBackup: (backup) => post('backup', withPassword({ action: 'restore', backup })),
   importLog: (entries) => post('backup', withPassword({ action: 'importLog', entries })),
@@ -79,7 +79,7 @@ export const api = {
   fixLogGame: (fix) => post('backup', withPassword({ action: 'fixLogGame', ...fix })),
   setWallets: (balances) => post('backup', withPassword({ action: 'setWallets', balances })),
   setLogTickets: (games) => post('backup', withPassword({ action: 'setLogTickets', games })),
-  factoryReset: () => post('factoryReset', withPassword()),
+  factoryReset: () => post('game', withPassword({ action: 'factoryReset' })),
   changeOrganizerPassword: (newPassword) =>
     post('organizer', withPassword({ action: 'changePassword', newPassword })),
 };
