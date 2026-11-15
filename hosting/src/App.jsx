@@ -707,8 +707,8 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       const data = await res.json();
       const games = Array.isArray(data) ? data : data.games;
       if (!Array.isArray(games) || games.length === 0) throw new Error('The pick lists file is empty.');
-      const r = await api.setLogTickets(games);
-      flash(r && r.skipped && r.skipped.length
+      const r = (await api.setLogTickets(games)).data || {};
+      flash(r.skipped && r.skipped.length
         ? `Pick lists loaded for ${r.updated} games. Skipped: ${r.skipped.join(', ')}`
         : `Pick lists loaded for ${r.updated} games — the season standings now count every play.`);
     });
