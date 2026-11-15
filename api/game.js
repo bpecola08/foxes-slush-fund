@@ -1,6 +1,6 @@
 // POST /api/game — { password, action, ... }.
 // Password-gated organizer endpoint for setting up the next game.
-// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'setScratched' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks' | 'setStartingGoalie' | 'resetGame' | 'payAmanda' | 'factoryReset'.
+// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'setScratched' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks' | 'setStartingGoalie' | 'resetGame' | 'voidGame' | 'payAmanda' | 'factoryReset'.
 //   setInfo:      { gameDate, opponent } -> { game }
 //   setCarryover: { category, amountCents } -> { game }
 //   setDrawMode:  { drawMode } -> { game }   ('mixed' | 'virtual' | 'physical')
@@ -101,6 +101,13 @@ module.exports = handler(async (body) => {
       };
     });
     return { logged: out.logged };
+  }
+  if (action === 'voidGame') {
+    const out = await db.withState((state) => {
+      const r = logic.voidGame(state);
+      return { result: r };
+    });
+    return { ...out };
   }
   if (action === 'payAmanda') {
     return db.withState((state) => logic.payAmanda(state));
