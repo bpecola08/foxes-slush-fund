@@ -322,8 +322,8 @@ function Landing({ game, log, onGo, onInit }) {
         </p>
       )}
       <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
-      <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
       <p className="muted small" style={{ textAlign: 'center' }}>Parents log in with their kid&apos;s jersey number.</p>
+      <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal</button>
       <button className="nav-hero" onClick={() => onGo('board')}>
         {(game?.phase === 'open' || game?.phase === 'closed')
           ? `Picks for Foxes vs ${game.opponent || 'TBD'}`
@@ -334,6 +334,9 @@ function Landing({ game, log, onGo, onInit }) {
       {log && log.length > 0 && (
         <div>
           <h3>Past games — winners &amp; slush</h3>
+          {log.length > 2 && (
+            <p className="muted small">Showing the last 2 games — older games are in the Game Log.</p>
+          )}
           {/* Only the last two games: the log is newest-first, so slice(0, 2).
               Each game gets its own outline color so the two are easy to tell apart. */}
           {log.slice(0, 2).map((entry, i) => (
@@ -349,9 +352,6 @@ function Landing({ game, log, onGo, onInit }) {
                 : <div>Slush for this game: <strong>{money(entrySlush(entry))}</strong></div>}
             </div>
           ))}
-          {log.length > 2 && (
-            <p className="muted small">Showing the last 2 games — older games are in the Game Log.</p>
-          )}
         </div>
       )}
       {game && (
