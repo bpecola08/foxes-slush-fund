@@ -390,6 +390,8 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [fixKey, setFixKey] = useState('');
   const [fixGameSlush, setFixGameSlush] = useState('');
   const [fixSeasonSlush, setFixSeasonSlush] = useState('');
+  const [fixBalances, setFixBalances] = useState({});
+  const [fixBalancesInit, setFixBalancesInit] = useState(false);
 
   useEffect(() => {
     if (game) {
@@ -411,6 +413,16 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   useEffect(() => {
     setScratchSel(game?.scratched || []);
   }, [JSON.stringify(game?.scratched || [])]);
+
+  // Fill the Fix-the-books balance boxes once, from the live wallets.
+  useEffect(() => {
+    if (!fixBalancesInit && wallets && wallets.length) {
+      const init = {};
+      for (const w of wallets) init[w.familyId] = String((w.balanceCents || 0) / 100);
+      setFixBalances(init);
+      setFixBalancesInit(true);
+    }
+  }, [wallets, fixBalancesInit]);
 
   const run = async (fn) => {
     setBusy(true);
@@ -727,6 +739,22 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       flash(`Slush for the ${fixEntry.opponent} game set to ${money(g)} (season ${money(s)}).`);
     });
   };
+  const saveWalletFix = async () => {
+    const balances = {};
+    for (const w of wallets) {
+      const raw = fixBalances[w.familyId];
+      if (raw === undefined || raw === '') continue;
+      const cents = Math.round(parseFloat(raw) * 100);
+      if (!Number.isFinite(cents)) return fail(new Error(`That balance for ${w.familyLabel} is not a number.`));
+      balances[w.familyId] = cents;
+    }
+    if (!Object.keys(balances).length) return fail(new Error('No balances to save.'));
+    if (!window.confirm(`Set ${Object.keys(balances).length} wallet balance(s) to exactly the amounts shown? This replaces the current balances.`)) return;
+    await run(async () => {
+      const out = (await api.setWallets(balances)).data;
+      flash(`${out.updated} wallet balance(s) set.`);
+    });
+  };
 
   const payAmanda = async () => {
     if (!game.slushCents || game.slushCents <= 0) return;
@@ -1011,6 +1039,12 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
             <p><button onClick={saveGameSlushFix} disabled={busy}>Save this game&apos;s slush</button></p>
           </div>
         )}
+        <h3>Wallet balances</h3>
+        <p className="muted small">Every family&apos;s exact balance — negative means they owe. Saving replaces all of them at once, so the app can be matched to the old app in one pass.</p>
+        {wallets.map((w) => (
+          <label key={w.familyId} className="small">{w.familyLabel} $ <input type="number" step="0.01" value={fixBalances[w.familyId] ?? ''} onChange={(e) => setFixBalances({ ...fixBalances, [w.familyId]: e.target.value })} /></label>
+        ))}
+        <p><button className="primary" onClick={saveWalletFix} disabled={busy}>Save all balances</button></p>
       </div>
 
       <div className="card">

@@ -75,6 +75,7 @@ export const api = {
   setSlush: (owedCents, sentCents, sentAt) =>
     post('backup', withPassword({ action: 'setSlush', owedCents, sentCents, sentAt })),
   fixLogGame: (fix) => post('backup', withPassword({ action: 'fixLogGame', ...fix })),
+  setWallets: (balances) => post('backup', withPassword({ action: 'setWallets', balances })),
   factoryReset: () => post('factoryReset', withPassword()),
   changeOrganizerPassword: (newPassword) =>
     post('organizer', withPassword({ action: 'changePassword', newPassword })),
