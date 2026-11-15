@@ -63,6 +63,8 @@ export const api = {
   closeDraft: () => post('game', withPassword({ action: 'closeDraft' })),
   reopenDraft: () => post('game', withPassword({ action: 'reopenDraft' })),
   rebuildDecks: () => post('game', withPassword({ action: 'rebuildDecks' })),
+  setStartingGoalie: (startingGoalie) =>
+    post('game', withPassword({ action: 'setStartingGoalie', startingGoalie })),
   resolveCategory: (category, playerNumber) =>
     post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
   setPayout: (category, ticketId, disposition) =>
