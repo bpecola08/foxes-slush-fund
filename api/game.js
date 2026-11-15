@@ -1,6 +1,6 @@
 // POST /api/game — { password, action, ... }.
 // Password-gated organizer endpoint for setting up the next game.
-// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'setScratched' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks' | 'setStartingGoalie'.
+// action: 'setInfo' | 'setCarryover' | 'setDrawMode' | 'setScratched' | 'open' | 'closeDraft' | 'reopenDraft' | 'rebuildDecks' | 'setStartingGoalie' | 'resetGame' | 'payAmanda' | 'factoryReset'.
 //   setInfo:      { gameDate, opponent } -> { game }
 //   setCarryover: { category, amountCents } -> { game }
 //   setDrawMode:  { drawMode } -> { game }   ('mixed' | 'virtual' | 'physical')
@@ -10,6 +10,9 @@
 //   reopenDraft:  {} -> { game }   (undo a close)
 //   rebuildDecks: {} -> { firstGoal: {before, after}, firstPenalty: {...}, playmaker: {...} }   (one-time fix: rebuild the open game's decks from the starting goalie, keeping drawn cards out)
 //   setStartingGoalie: { startingGoalie } -> { startingGoalie, decks, conflicts }   (fix a wrong goalie pick on an open game; decks rebuild, sold plays stay)
+//   resetGame:    {} -> { logged }   (saves the finished game to the Game Log, then clears back to setup; merged in from the old resetGame function)
+//   payAmanda:    {} -> { paidCents, paidAt }   (records the slush as sent to Amanda and zeroes the amount owed; merged in from the old payAmanda function)
+//   factoryReset: {} -> {}   (wipes plays, pots, wallets, slush and the Game Log; the organizer password survives; merged in from the old factoryReset function)
 const { handler } = require('./_lib/http');
 const db = require('./_lib/db');
 const logic = require('../lib/logic');
@@ -87,6 +90,34 @@ module.exports = handler(async (body) => {
       return { result: r };
     });
     return { ...out };
+  }
+  if (action === 'resetGame') {
+    const out = await db.withState((state) => {
+      const r = logic.resetGame(state);
+      return {
+        result: r,
+        logEntry: r.logged ? r.entry : null,
+        nextGameId: `game-${Date.now().toString(36)}`,
+      };
+    });
+    return { logged: out.logged };
+  }
+  if (action === 'payAmanda') {
+    return db.withState((state) => logic.payAmanda(state));
+  }
+  if (action === 'factoryReset') {
+    const firestore = db.db();
+    await firestore.runTransaction(async (tx) => {
+      const state = logic.createInitialState();
+      // Firestore requires every read in a transaction to happen before
+      // every write, so the game-log read must come first — reading it
+      // after the saveState writes throws "Firestore transactions require
+      // all reads to be executed before all writes."
+      const logSnap = await tx.get(firestore.collection('gamelog'));
+      db.saveState(firestore, tx, state, `game-${Date.now().toString(36)}`);
+      for (const doc of logSnap.docs) tx.delete(doc.ref);
+    });
+    return {};
   }
   throw new Error(`Unknown game action: ${action}`);
 });
