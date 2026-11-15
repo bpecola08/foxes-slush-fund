@@ -437,6 +437,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   // the tap-again arm for its save button.
   const [goaliePick, setGoaliePick] = useState(null);
   const [goalieArm, setGoalieArm] = useState(false);
+  const [voidArm, setVoidArm] = useState(false);
   const [potInputs, setPotInputs] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
 
   // Bank manager
@@ -628,6 +629,21 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     });
   };
 
+  // Reset the game in progress without logging it: every play is
+  // refunded to its family wallet and all picks clear. Two-step confirm.
+  const voidTap = async () => {
+    if (!voidArm) {
+      setVoidArm(true);
+      flash('Check, then tap the reset button again to confirm: every play in this game is refunded to the family wallets and all picks are cleared.');
+      return;
+    }
+    setVoidArm(false);
+    await run(async () => {
+      const r = (await api.voidGame()).data;
+      flash(`Game reset — ${r.plays} play(s) refunded, $${(r.refundedCents / 100).toFixed(2)} back into the family wallets. Nothing was saved to the Game Log.`);
+    });
+  };
+
   // Shared by the open and closed cards: the change-goalie fix block.
   const goalieSel = goaliePick ?? game?.startingGoalie;
   const goalieFixBlock = game ? (
@@ -642,6 +658,18 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
         </button>{' '}
         <span className="muted small">Now: #{game.startingGoalie} in net.</span>
       </p>
+    </div>
+  ) : null;
+
+  // Shared by the open and closed cards: the reset-this-game block.
+  const playCount = (game?.tickets || []).length;
+  const voidBlock = game && playCount > 0 ? (
+    <div>
+      <h3>Reset this game</h3>
+      <p className="muted small">Wrong game, or called off? Every play is refunded back into the family wallets, this game&apos;s slush comes back out, and all picks are cleared. The rolled-over pots stay for the next game, and nothing is saved to the Game Log. Only works before any winner is picked.</p>
+      <button className="danger" onClick={voidTap} disabled={busy}>
+        {voidArm ? 'Tap again to confirm the reset' : `Reset game — refund ${playCount} play${playCount === 1 ? '' : 's'}`}
+      </button>
     </div>
   ) : null;
 
@@ -937,6 +965,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <h3>Close the draft</h3>
           <p className="muted small">Once the real game starts, close the draft so no more plays can be bought. You can still resolve the game after it ends.</p>
           <button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button>
+          {voidBlock}
         </div>
       )}
 
@@ -946,6 +975,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <p className="muted">No more plays can be bought. Resolve the game below once it ends, or reopen the draft if you closed it early.</p>
           <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button>
           {goalieFixBlock}
+          {voidBlock}
         </div>
       )}
 
