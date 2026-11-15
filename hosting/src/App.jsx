@@ -1050,7 +1050,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       </div>
 
       <div className="card">
-        <h2>Bank Manager — deposits</h2>
+        <h2>Bank Manager — deposits &amp; balances</h2>
         <p className="muted small">Take cash/Venmo from a family, then top up their wallet here.</p>
         <div className="row">
           <select value={depFamily} onChange={(e) => setDepFamily(e.target.value)}>
@@ -1076,10 +1076,14 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
                 className="quick-amount"
               />
               <button className="ghost" onClick={() => quickDepositCustom(w.familyId)} disabled={busy}>Add</button>
+              <div className="small muted" style={{ marginTop: 6 }}>
+                Exact balance $ <input type="number" step="0.01" aria-label={`Exact balance for ${w.familyLabel}`} value={fixBalances[w.familyId] ?? ''} onChange={(e) => setFixBalances({ ...fixBalances, [w.familyId]: e.target.value })} className="quick-amount" />
+              </div>
             </div>
           ))}
         </div>
-        <p className="muted small">Quick cash: tap +$6, +$10, or +$20 next to a family when they hand you cash at the rink, or type any amount in the $ box and tap Add. Use the form above for a deposit without the quick buttons.</p>
+        <p><button className="primary" onClick={saveWalletFix} disabled={busy}>{fixArmed === 'wallets' ? 'Tap again to confirm' : 'Save all balances'}</button></p>
+        <p className="muted small">Quick cash: tap +$6, +$10, or +$20 next to a family when they hand you cash at the rink, or type any amount in the $ box and tap Add. Use the form above for a deposit without the quick buttons. To correct a balance outright, type the exact amount in a family&apos;s Exact balance box (negative means they owe) and tap Save all balances — that replaces the balances with exactly what&apos;s shown.</p>
       </div>
 
       {(game.phase === 'open' || game.phase === 'closed') && (
@@ -1209,12 +1213,6 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
             <p><button onClick={saveGameSlushFix} disabled={busy}>Save this game&apos;s slush</button></p>
           </div>
         )}
-        <h3>Wallet balances</h3>
-        <p className="muted small">Every family&apos;s exact balance — negative means they owe. Saving replaces all of them at once, so the app can be matched to the old app in one pass.</p>
-        {wallets.map((w) => (
-          <label key={w.familyId} className="small">{w.familyLabel} $ <input type="number" step="0.01" value={fixBalances[w.familyId] ?? ''} onChange={(e) => setFixBalances({ ...fixBalances, [w.familyId]: e.target.value })} /></label>
-        ))}
-        <p><button className="primary" onClick={saveWalletFix} disabled={busy}>{fixArmed === 'wallets' ? 'Tap again to confirm' : 'Save all balances'}</button></p>
       </div>
 
       <div className="card">
