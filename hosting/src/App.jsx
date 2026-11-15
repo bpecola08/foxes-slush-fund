@@ -71,6 +71,24 @@ const entrySlush = (entry) => {
   if (!plays.length) return null;
   return plays.reduce((a, t) => a + (t.paidCents || 0), 0) / 2;
 };
+// Ghost-win odds for the pick screen (Brandon's pick, Nov 14, 2026): how
+// often each player has won each category across the logged games, with one
+// phantom win added for every player so nobody ever shows 0%:
+//   pct = (wins + 1) / (games + roster size)
+function playerOdds(log) {
+  const entries = log || [];
+  const wins = {};
+  for (const { key } of CATEGORIES) {
+    const byPlayer = new Map();
+    for (const entry of entries) {
+      const res = entry.resolutions ? entry.resolutions[key] : null;
+      if (res && res.playerNumber) byPlayer.set(res.playerNumber, (byPlayer.get(res.playerNumber) || 0) + 1);
+    }
+    wins[key] = byPlayer;
+  }
+  return { games: entries.length, wins };
+}
+const oddsPct = (wins, games) => Math.round((100 * ((wins || 0) + 1)) / (games + ROSTER.length));
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) =>
   d ? new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -231,7 +249,7 @@ export default function App() {
         />
       )}
       {view === 'organizer' && <OrganizerPage game={game} wallets={walletList} log={log} flash={flash} fail={fail} />}
-      {view === 'parent' && <ParentPortal game={game} wallets={walletList} flash={flash} fail={fail} />}
+      {view === 'parent' && <ParentPortal game={game} wallets={walletList} log={log} flash={flash} fail={fail} />}
       {view === 'board' && <Board game={game} flash={flash} fail={fail} />}
       {view === 'gamelog' && <GameLogPage log={log} />}
       {view === 'season' && <SeasonPage game={game} log={log} wallets={walletList} />}
@@ -1178,7 +1196,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
 
 // ---------------------------------------------------------------------------
 
-function ParentPortal({ game, wallets, flash, fail }) {
+function ParentPortal({ game, wallets, log, flash, fail }) {
   const [pin, setPin] = useState('');
   const [wallet, setWallet] = useState(null);
   const [selected, setSelected] = useState({ firstGoal: null, firstPenalty: null, playmaker: null });
@@ -1202,6 +1220,11 @@ function ParentPortal({ game, wallets, flash, fail }) {
   }, [drawMode]);
 
   const members = wallet ? familyMembers(wallet) : [];
+
+  // Season odds per player/category for the pick buttons (ghost-win math —
+  // see playerOdds). Runs on every render, even before login, so a bad log
+  // shape would surface on the PIN screen rather than mid-draft.
+  const odds = playerOdds(log);
 
   const pickBettor = (name) => {
     setBettor(name);
@@ -1351,7 +1374,7 @@ function ParentPortal({ game, wallets, flash, fail }) {
           {effectiveMode === 'virtual' ? (
             <p className="muted small">Tap one face-down card per category — $2 per category ($1 to the pot, $1 to the slush). The cards are shuffled — you won’t know who you drew until you buy.</p>
           ) : (
-            <p className="muted small">Draw a real chip from the bag for each category, then tap the player you got below — $2 per category ($1 to the pot, $1 to the slush). Players already drawn are gone from the bag.</p>
+            <p className="muted small">Draw a real chip from the bag for each category, then tap the player you got below — $2 per category ($1 to the pot, $1 to the slush). Players already drawn are gone from the bag. The % under each player is how often they&apos;ve won that category this season — nobody&apos;s at 0%, every kid has a shot.</p>
           )}
           {CATEGORIES.map(({ key, label }) => {
             const count = game.deckCounts?.[key] ?? 0;
@@ -1364,15 +1387,19 @@ function ParentPortal({ game, wallets, flash, fail }) {
                 <div key={key} className="draft-cat">
                   <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {available.length} chips left
                   <div className="deck">
-                    {available.map((p) => (
-                      <button
-                        key={p.number}
-                        className={selected[key] === p.number ? 'picked' : ''}
-                        onClick={() => setSelected({ ...selected, [key]: selected[key] === p.number ? null : p.number })}
-                      >
-                        #{p.number} {p.name}
-                      </button>
-                    ))}
+                    {available.map((p) => {
+                      const w = odds.wins[key].get(p.number) || 0;
+                      return (
+                        <button
+                          key={p.number}
+                          className={selected[key] === p.number ? 'picked' : ''}
+                          onClick={() => setSelected({ ...selected, [key]: selected[key] === p.number ? null : p.number })}
+                        >
+                          #{p.number} {p.name}
+                          <span className="odds-line">{oddsPct(w, odds.games)}% · {w} win{w === 1 ? '' : 's'}</span>
+                        </button>
+                      );
+                    })}
                     {available.length === 0 && (
                       <span className="muted small"> No chips left in the bag for this one — switch to virtual or skip it.</span>
                     )}
