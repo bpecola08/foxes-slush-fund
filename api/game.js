@@ -4,6 +4,7 @@
 //   setInfo:      { gameDate, opponent } -> { game }
 //   setCarryover: { category, amountCents } -> { game }
 //   setDrawMode:  { drawMode } -> { game }   ('mixed' | 'virtual' | 'physical')
+//   setGamesLeft: { gamesLeft } -> { gamesLeft }   (games remaining this season; drives the home-page slush projection)
 //   setScratched: { scratched: [jersey numbers] } -> { scratched, alreadyPicked }   (players out for this game; decks rebuild, drawn cards stay drawn)
 //   open:         { gameDate, opponent, startingGoalie, scratched? } -> { game }
 //   closeDraft:   {} -> { game }   (draft closed once the real game starts)
@@ -43,6 +44,13 @@ module.exports = handler(async (body) => {
       return { result: g };
     });
     return { game };
+  }
+  if (action === 'setGamesLeft') {
+    const gamesLeft = await db.withState((state) => {
+      const n = logic.setGamesLeft(state, body.gamesLeft);
+      return { result: n };
+    });
+    return { gamesLeft };
   }
   if (action === 'setScratched') {
     const out = await db.withState((state) => {

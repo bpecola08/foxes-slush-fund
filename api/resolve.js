@@ -1,8 +1,10 @@
 // POST /api/resolve — { password, action, ... }.
 // Password-gated organizer endpoint for resolving winners and payouts.
-// action: 'resolve' | 'setPayout'.
+// action: 'resolve' | 'setPayout' | 'roll' | 'unroll'.
 //   resolve:   { category, playerNumber } -> { resolution }
 //   setPayout: { category, ticketId, disposition } -> { winner }
+//   roll:      { category } -> { resolution } (no winner — the pot rolls over)
+//   unroll:    { category } -> { resolution: null } (undo a no-winner roll)
 // disposition: 'paid' | 'rolled' | 'unmarked'
 const { handler } = require('./_lib/http');
 const db = require('./_lib/db');
@@ -24,6 +26,20 @@ module.exports = handler(async (body) => {
       return { result: w };
     });
     return { winner };
+  }
+  if (action === 'roll') {
+    const resolution = await db.withState((state) => {
+      const r = logic.rollCategory(state, body.category);
+      return { result: r };
+    });
+    return { resolution };
+  }
+  if (action === 'unroll') {
+    await db.withState((state) => {
+      logic.unrollCategory(state, body.category);
+      return { result: null };
+    });
+    return { resolution: null };
   }
   throw new Error(`Unknown resolve action: ${action}`);
 });
