@@ -422,6 +422,7 @@ function Landing({ game, wallets, log, onGo, onInit }) {
           : 'Picks & winners'}
       </button>
       <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
+      <button className="nav-hero" onClick={() => onGo('season')}>🏆 Season standings</button>
       {gameActive && potsBlock}
       {log && log.length > 0 && (
         <div>
