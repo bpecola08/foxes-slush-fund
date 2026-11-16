@@ -348,6 +348,10 @@ function Landing({ game, wallets, log, onGo, onInit }) {
       }
     : null;
   const whole = (c) => `$${Math.round(c / 100).toLocaleString('en-US')}`;
+  // Big-pot hype banner: the largest pot, once it reaches $50.
+  const bigPot = game
+    ? CATEGORIES.map((c) => ({ label: c.label, cents: game.pots?.[c.key] || 0 })).sort((a, b) => b.cents - a.cents)[0]
+    : null;
   // One line per category: who won and how much, then the kid they picked.
   // No colors — parents and grandparents read the same. showAmount=false
   // (the Pots section) leaves the amount off because the pot is already shown.
@@ -409,6 +413,11 @@ function Landing({ game, wallets, log, onGo, onInit }) {
       {projection && (
         <p className="slush-projection">
           🎯 If every family plays every game: <strong>~{whole(projection.sellout)}</strong>
+        </p>
+      )}
+      {bigPot && bigPot.cents >= 5000 && (
+        <p className="big-pot">
+          🔥 The {bigPot.label} pot {game.phase === 'setup' ? 'starts at' : 'is up to'} <strong>{money(bigPot.cents)}</strong>!
         </p>
       )}
       {game ? (
@@ -1473,6 +1482,7 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
       <button className="ghost" onClick={onBack}>← Organizer Page</button>
       <h2>{wallet.familyLabel}</h2>
       <p>Wallet balance: <strong>{money(wallet.balanceCents)}</strong></p>
+      <VenmoPayButton wallet={wallet} />
       <p className="muted">
         {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} · Goalie #{game.startingGoalie}
       </p>
@@ -1605,6 +1615,21 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
   );
 }
 
+// When a family's wallet is short, a one-tap Venmo link with the exact
+// amount owed and the note already filled in.
+function VenmoPayButton({ wallet }) {
+  if (!wallet || (wallet.balanceCents || 0) >= 0) return null;
+  const owed = -(wallet.balanceCents || 0);
+  const href = `https://venmo.com/Brandon-Pecola?txn=pay&amount=${(owed / 100).toFixed(2)}&note=${encodeURIComponent('Foxes chip game')}`;
+  return (
+    <p>
+      <a className="venmo-btn" href={href} target="_blank" rel="noreferrer">
+        💸 Pay Brandon {money(owed)} on Venmo
+      </a>
+    </p>
+  );
+}
+
 function ParentPortal({ game, wallets, log, flash, fail }) {
   const [pin, setPin] = useState('');
   const [wallet, setWallet] = useState(null);
@@ -1722,6 +1747,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
       <div className="card">
         <h2>{wallet.familyLabel}</h2>
         <p>Wallet balance: <strong>{money(wallet.balanceCents)}</strong></p>
+        <VenmoPayButton wallet={wallet} />
         <p className="muted">
           {game?.phase === 'closed'
             ? 'The draft is closed — the game has started. Good luck!'
@@ -1741,6 +1767,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
     <div className="card">
       <h2>{wallet.familyLabel}</h2>
       <p>Wallet balance: <strong>{money(wallet.balanceCents)}</strong></p>
+      <VenmoPayButton wallet={wallet} />
       <p className="muted">
         {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} · Goalie #{game.startingGoalie}
       </p>
