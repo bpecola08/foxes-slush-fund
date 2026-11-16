@@ -6,8 +6,8 @@ const assert = require('node:assert/strict');
 const logic = require('../lib/logic');
 const { hashPassword, verifyPassword } = require('../lib/auth');
 
-const { createInitialState, deposit, buyTicket, resolveCategory, setPayout,
-  resetGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setCarryover, setGameInfo, payAmanda, setDrawMode, setScratched, buildBackup, applyBackup, validateImportEntries } = logic;
+const { createInitialState, deposit, buyTicket, resolveCategory, rollCategory, unrollCategory, setPayout,
+  resetGame, voidGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setStartingGoalie, setCarryover, setGameInfo, payAmanda, setDrawMode, setGamesLeft, setScratched, buildBackup, applyBackup, validateImportEntries, correctSlush, logFixDelta, setWalletBalances } = logic;
 
 // Deterministic RNG (LCG) so shuffles are reproducible in tests.
 function seededRng(seed = 42) {
@@ -282,6 +282,48 @@ test('Decks follow the starting goalie: First Goal excludes only the goalie in n
   assert.equal(out.playmaker.after, 16);
 });
 
+test('setStartingGoalie: an open game opened with the wrong goalie can be fixed — decks rebuild, sold plays stay, conflicts are reported', () => {
+  const state = createInitialState();
+  openGame(state, { gameDate: '2026-11-15', opponent: 'North Pittsburgh', startingGoalie: 88, rng: seededRng(11) });
+  // Luke picked as goalie: he is out of First Goal, Harrison is out of everything.
+  assert.equal(state.game.decks.firstGoal.length, 14);
+  assert.equal(state.game.decks.firstPenalty.length, 15);
+  assert.ok(!state.game.decks.firstPenalty.includes(29));
+
+  // Sell a play on Luke in First Penalty (he is in there as the "goalie"),
+  // then fix the goalie: Luke is really skating out, Harrison is in net.
+  deposit(state, '22', 2000);
+  const fpIndex = state.game.decks.firstPenalty.indexOf(88);
+  buyTicket(state, { familyId: '22', buyer: 'Brandon Pecola', picks: { firstGoal: null, firstPenalty: fpIndex, playmaker: null }, mode: 'virtual' });
+
+  const out = setStartingGoalie(state, 29);
+  assert.equal(state.game.startingGoalie, 29);
+  assert.equal(out.startingGoalie, 29);
+  assert.equal(state.game.decks.firstGoal.length, 15); // everyone but Harrison, nothing drawn there
+  assert.ok(state.game.decks.firstGoal.includes(88)); // Luke can score now
+  assert.equal(state.game.decks.firstPenalty.length, 15); // 16 minus the drawn Luke card
+  assert.ok(!state.game.decks.firstPenalty.includes(88)); // sold play's card stays out
+  assert.equal(state.game.decks.playmaker.length, 16);
+  assert.ok(state.game.decks.playmaker.includes(29)); // Harrison is in as the goalie
+  assert.equal(out.conflicts.length, 0); // Luke in First Penalty still fits
+
+  // A sold play that no longer fits is reported, not changed: sell Harrison
+  // in First Penalty (he is in as the goalie), then switch the goalie back.
+  deposit(state, '19', 2000);
+  const hIndex = state.game.decks.firstPenalty.indexOf(29);
+  buyTicket(state, { familyId: '19', buyer: 'Cheryl Vrcek', picks: { firstGoal: null, firstPenalty: hIndex, playmaker: null }, mode: 'virtual' });
+  const out2 = setStartingGoalie(state, 88);
+  assert.equal(out2.conflicts.length, 1);
+  assert.equal(out2.conflicts[0].playerNumber, 29);
+  assert.equal(out2.conflicts[0].category, 'firstPenalty');
+  assert.equal(state.tickets.length, 2); // both plays untouched
+
+  // Not in setup, and only a real goalie.
+  const fresh = createInitialState();
+  assert.throws(() => setStartingGoalie(fresh, 29), /No game is open/);
+  assert.throws(() => setStartingGoalie(state, 22), /#29 or #88/);
+});
+
 test('Play now pay later: a ticket goes through on a short wallet and the balance goes negative; the ticket is marked payLater', () => {
   const state = createInitialState();
   openGame(state, { gameDate: '2026-11-14', opponent: 'Johnstown', startingGoalie: 29, rng: seededRng(7) });
@@ -355,6 +397,51 @@ test('resolve with no winning tickets marks the pot as a rollover', () => {
   assert.equal(res.winners.length, 0);
   assert.equal(res.rollover, true);
   assert.equal(res.potCents, 100);
+});
+
+test('rollCategory marks a category as a no-winner rollover and the pot carries at reset', () => {
+  const state = fundedGame();
+  buyFullTicket(state, '22', 'Trish'); // playmaker pot now $1
+  const res = rollCategory(state, 'playmaker');
+  assert.equal(res.noWinner, true);
+  assert.equal(res.playerNumber, null);
+  assert.equal(res.winners.length, 0);
+  assert.equal(res.potCents, 100);
+  const { entry } = resetGame(state);
+  assert.equal(entry.rollovers.playmaker, 100);
+  assert.equal(state.game.carryover.playmaker, 100);
+  assert.equal(entry.resolutions.playmaker.noWinner, true);
+});
+
+test('rollCategory refuses once a category has a winning bettor', () => {
+  const state = fundedGame();
+  const t = buyFullTicket(state, '22', 'Trish');
+  resolveCategory(state, 'firstGoal', t.picks.firstGoal.number);
+  assert.throws(() => rollCategory(state, 'firstGoal'), /already has a winner/);
+});
+
+test('unrollCategory clears a no-winner roll so a player can still be resolved', () => {
+  const state = fundedGame();
+  const t = buyFullTicket(state, '22', 'Trish');
+  rollCategory(state, 'playmaker');
+  unrollCategory(state, 'playmaker');
+  assert.equal(state.game.resolutions.playmaker, null);
+  const res = resolveCategory(state, 'playmaker', t.picks.playmaker.number);
+  assert.equal(res.winners.length, 1);
+  assert.throws(() => unrollCategory(state, 'playmaker'), /not marked as a no-winner rollover/);
+});
+
+test('validateImportEntries keeps a no-winner rollover entry intact', () => {
+  const [entry] = validateImportEntries([{
+    gameDate: '2026-11-15', opponent: 'North Pittsburgh', startingGoalie: 88,
+    pots: { firstGoal: 2200, firstPenalty: 1000, playmaker: 2200 },
+    resolutions: {
+      playmaker: { playerNumber: null, playerName: null, potCents: 2200, rollover: true, noWinner: true, winners: [] },
+    },
+  }]);
+  assert.equal(entry.resolutions.playmaker.noWinner, true);
+  assert.equal(entry.resolutions.playmaker.playerNumber, null);
+  assert.equal(entry.resolutions.playmaker.potCents, 2200);
 });
 
 test('re-resolving a category changes the winner (wrong kid fix)', () => {
@@ -825,4 +912,117 @@ test('password hashing: correct password verifies, wrong one does not, hashes di
   assert.equal(verifyPassword('wrong', h1), false);
   assert.equal(verifyPassword('test-organizer-password', 'not-a-hash'), false);
   assert.ok(!h1.includes('test-organizer-password'), 'hash must not contain the plaintext password');
+});
+
+test('correctSlush sets the owed amount and records the sent total as one payment', () => {
+  const state = createInitialState();
+  state.slushCents = 300;
+  const out = correctSlush(state, { owedCents: 3600, sentCents: 41400, sentAt: '2026-10-26T23:59:59.000Z' });
+  assert.equal(state.slushCents, 3600);
+  assert.deepEqual(state.slushPayments, [{ amountCents: 41400, paidAt: '2026-10-26T23:59:59.000Z' }]);
+  assert.deepEqual(out, { slushCents: 3600, sentCents: 41400 });
+});
+
+test('correctSlush with nothing sent clears the payment history', () => {
+  const state = createInitialState();
+  state.slushPayments = [{ amountCents: 500, paidAt: '2026-01-01T00:00:00.000Z' }];
+  correctSlush(state, { owedCents: 0, sentCents: 0 });
+  assert.equal(state.slushCents, 0);
+  assert.deepEqual(state.slushPayments, []);
+});
+
+test('correctSlush rejects negative or fractional amounts', () => {
+  const state = createInitialState();
+  assert.throws(() => correctSlush(state, { owedCents: -1, sentCents: 0 }), /whole number of cents/);
+  assert.throws(() => correctSlush(state, { owedCents: 0, sentCents: 10.5 }), /whole number of cents/);
+});
+
+test('logFixDelta moves the payout in and out of the wallet on a flip', () => {
+  const winner = { buyer: 'Jeffrey', familyId: '58', payoutCents: 1200, disposition: 'paid' };
+  assert.equal(logFixDelta(winner, 'rolled'), 1200);
+  assert.equal(logFixDelta({ ...winner, disposition: 'rolled' }, 'paid'), -1200);
+  assert.equal(logFixDelta(winner, 'paid'), 0);
+});
+
+test('logFixDelta is 0 for a rolled-over pot or a missing winner', () => {
+  assert.equal(logFixDelta(null, 'rolled'), 0);
+  assert.equal(logFixDelta({ buyer: null, familyId: null, payoutCents: 1200, disposition: 'rolled' }, 'paid'), 0);
+  assert.throws(() => logFixDelta({ buyer: 'X', familyId: '58', payoutCents: 100, disposition: 'paid' }, 'unmarked'), /paid.*rolled/);
+});
+
+test('setWalletBalances sets exact balances, including negatives, in one pass', () => {
+  const state = createInitialState();
+  const out = setWalletBalances(state, { '58': 2000, '9': -1500, '23': 0 });
+  assert.equal(out.updated, 3);
+  assert.equal(state.wallets['58'].balanceCents, 2000);
+  assert.equal(state.wallets['9'].balanceCents, -1500);
+  assert.equal(state.wallets['23'].balanceCents, 0);
+});
+
+test('setWalletBalances validates everything before changing anything', () => {
+  const state = createInitialState();
+  state.wallets['58'].balanceCents = 1400;
+  assert.throws(() => setWalletBalances(state, { '58': 2000, nope: 100 }), /Unknown family/);
+  assert.equal(state.wallets['58'].balanceCents, 1400);
+  assert.throws(() => setWalletBalances(state, { '58': 10.5 }), /whole number of cents/);
+  assert.throws(() => setWalletBalances(state, {}), /No balances/);
+});
+
+// ---------------------------------------------------------------------------
+// Voiding a game (reset with refunds)
+// ---------------------------------------------------------------------------
+
+test('voidGame refunds every play, backs the slush out, keeps the rolled pots', () => {
+  const state = createInitialState();
+  setCarryover(state, 'firstGoal', 1200); // $12 rolled in from the last game
+  deposit(state, '22', 2000);
+  deposit(state, '17', 2000);
+  openGame(state, { gameDate: '2026-11-15', opponent: 'North Pittsburgh', startingGoalie: 88, rng: seededRng() });
+  buyFullTicket(state, '22', 'Trish'); // $6
+  buyTicket(state, { familyId: '17', buyer: 'Travis', picks: { firstGoal: 0, firstPenalty: null, playmaker: null } }); // $2
+  assert.equal(state.wallets['22'].balanceCents, 1400);
+  assert.equal(state.wallets['17'].balanceCents, 1800);
+  assert.equal(state.slushCents, 400);
+  const r = voidGame(state);
+  assert.equal(r.plays, 2);
+  assert.equal(r.refundedCents, 800);
+  assert.equal(state.wallets['22'].balanceCents, 2000);
+  assert.equal(state.wallets['17'].balanceCents, 2000);
+  assert.equal(state.slushCents, 0);
+  assert.equal(state.tickets.length, 0);
+  assert.equal(state.game.phase, 'setup');
+  assert.equal(state.game.carryover.firstGoal, 1200);
+  assert.equal(state.game.pots.firstGoal, 1200);
+  assert.equal(state.log.length, 0);
+});
+
+test('voidGame refuses once a winner has been picked', () => {
+  const state = fundedGame();
+  const t = buyFullTicket(state, '22', 'Trish');
+  resolveCategory(state, 'firstGoal', t.picks.firstGoal.number);
+  assert.throws(() => voidGame(state), /already been picked/);
+});
+
+test('setGamesLeft stores the count for the season projection and validates it', () => {
+  const state = createInitialState();
+  assert.equal(state.gamesLeft, null);
+  assert.equal(setGamesLeft(state, 24), 24);
+  assert.equal(state.gamesLeft, 24);
+  assert.equal(setGamesLeft(state, 0), 0);
+  assert.throws(() => setGamesLeft(state, -1), /whole number/);
+  assert.throws(() => setGamesLeft(state, 2.5), /whole number/);
+  assert.throws(() => setGamesLeft(state, 81), /whole number/);
+  assert.throws(() => setGamesLeft(state, '24'), /whole number/);
+});
+
+test('gamesLeft survives a backup round-trip and clears on factory reset', () => {
+  const state = createInitialState();
+  setGamesLeft(state, 24);
+  const backup = buildBackup(state, []);
+  assert.equal(backup.gamesLeft, 24);
+  const restored = createInitialState();
+  applyBackup(restored, backup);
+  assert.equal(restored.gamesLeft, 24);
+  factoryReset(restored);
+  assert.equal(restored.gamesLeft, null);
 });
