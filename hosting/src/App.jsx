@@ -1595,17 +1595,18 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
               </div>
             );
           })}
-          <p>
-            <button className="primary" onClick={() => buy(false)} disabled={busy || selectedCount === 0}>
-              Save play for {bettor} — ${price}.00
-            </button>
-          </p>
-          {wallet.balanceCents < price * 100 && (
+          {wallet.balanceCents < price * 100 ? (
             <p>
-              <button className="ghost" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
+              <button className="primary" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
                 Play now pay later — ${price}.00
               </button>
               <span className="muted small"> Their wallet is short — this play goes through and the balance goes negative until they pay you.</span>
+            </p>
+          ) : (
+            <p>
+              <button className="primary" onClick={() => buy(false)} disabled={busy || selectedCount === 0}>
+                Save play for {bettor} — ${price}.00
+              </button>
             </p>
           )}
         </div>
@@ -1882,17 +1883,18 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
               </div>
             );
           })}
-          <p>
-            <button className="primary" onClick={() => buy(false)} disabled={busy || selectedCount === 0}>
-              Buy play for {bettor} — ${price}.00
-            </button>
-          </p>
-          {wallet.balanceCents < price * 100 && (
+          {wallet.balanceCents < price * 100 ? (
             <p>
-              <button className="ghost" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
+              <button className="primary" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
                 Play now pay later — ${price}.00
               </button>
               <span className="muted small"> Your wallet is short — this play goes through and the balance goes negative until you pay the organizer.</span>
+            </p>
+          ) : (
+            <p>
+              <button className="primary" onClick={() => buy(false)} disabled={busy || selectedCount === 0}>
+                Buy play for {bettor} — ${price}.00
+              </button>
             </p>
           )}
         </div>
