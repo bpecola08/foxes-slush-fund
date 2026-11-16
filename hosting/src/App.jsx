@@ -416,13 +416,13 @@ function Landing({ game, wallets, log, onGo, onInit }) {
       )}
       <p className="muted small" style={{ textAlign: 'center' }}>Parents log in with their kid&apos;s jersey number.</p>
       <button className="primary parent-hero" onClick={() => onGo('parent')}>Parent Portal Login</button>
+      <button className="nav-hero" onClick={() => onGo('season')}>🏆 Season standings</button>
       <button className="nav-hero" onClick={() => onGo('board')}>
         {(game?.phase === 'open' || game?.phase === 'closed')
           ? `Picks for Foxes vs ${game.opponent || 'TBD'}`
           : 'Picks & winners'}
       </button>
       <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
-      <button className="nav-hero" onClick={() => onGo('season')}>🏆 Season standings</button>
       {gameActive && potsBlock}
       {log && log.length > 0 && (
         <div>
