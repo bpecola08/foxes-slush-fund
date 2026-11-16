@@ -15,6 +15,7 @@ button.danger-small { padding: 5px 10px; font-size: 0.8rem; }
 button.parent-hero { display: block; width: 100%; font-size: 1.3rem; font-weight: 800; padding: 16px; margin: 12px 0; }
 button.nav-hero { display: block; width: 100%; font-size: 1.15rem; font-weight: 700; padding: 14px; margin: 0 0 12px; }
 .slush-total { font-size: 1.25rem; font-weight: 800; color: #c8102e; margin: 8px 0; text-align: center; }
+.slush-projection { text-align: center; font-weight: 600; margin: 2px 0 8px; }
 input, select { padding: 8px 10px; border: 1px solid #cccccc; border-radius: 8px; margin: 4px 6px 4px 0; font-size: 0.95rem; max-width: 100%; }
 label { display: block; margin: 6px 0; }
 .row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }

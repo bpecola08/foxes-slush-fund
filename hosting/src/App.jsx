@@ -275,6 +275,7 @@ export default function App() {
       {view === 'landing' && (
         <Landing
           game={game}
+          wallets={wallets}
           log={log}
           onGo={setView}
           onInit={async () => {
@@ -298,7 +299,7 @@ export default function App() {
 
 // ---------------------------------------------------------------------------
 
-function Landing({ game, log, onGo, onInit }) {
+function Landing({ game, wallets, log, onGo, onInit }) {
   const potFor = (key) =>
     (game?.phase === 'open' || game?.phase === 'closed' ? game.pots?.[key] : game?.carryover?.[key]) || 0;
   // "Running total" = everything collected this season: what is owed to
@@ -312,11 +313,37 @@ function Landing({ game, log, onGo, onInit }) {
     : log && log[0]
       ? log[0].slushSeasonCents || 0
       : 0;
+  // Season projection (Brandon, Nov 15, 2026): average slush per game —
+  // from the Game Log plus the game in progress — times the games the
+  // organizer says are left, added to what's already been collected.
+  const playedEntries = (log || []).filter((e) => entrySlush(e) !== null);
+  let collectedCents = playedEntries.reduce((sum, e) => sum + entrySlush(e), 0);
+  let playedGames = playedEntries.length;
+  if (game && (game.phase === 'open' || game.phase === 'closed') && (game.tickets || []).length > 0) {
+    collectedCents += game.slushGameCents || 0;
+    playedGames += 1;
+  }
+  const gamesLeft = game && Number.isInteger(game.gamesLeft) ? game.gamesLeft : null;
+  // Sellout pace: every family plays a full $6 play → $3 of slush per family.
+  const familyCount = wallets && Object.keys(wallets).length > 0 ? Object.keys(wallets).length : 15;
+  const projection = gamesLeft && gamesLeft > 0 && playedGames > 0
+    ? {
+        total: collectedCents + (collectedCents / playedGames) * gamesLeft,
+        avg: collectedCents / playedGames,
+        sellout: collectedCents + familyCount * 300 * gamesLeft,
+      }
+    : null;
+  const whole = (c) => `$${Math.round(c / 100).toLocaleString('en-US')}`;
   // One line per category: who won and how much, then the kid they picked.
   // No colors — parents and grandparents read the same. showAmount=false
   // (the Pots section) leaves the amount off because the pot is already shown.
   const winnerText = (res, showAmount = true) => {
     if (!res) return 'Not decided yet';
+    if (res.noWinner) {
+      return showAmount
+        ? <>Rolled over — {money(res.potCents || 0)} · no winner</>
+        : <>Rolled over · no winner</>;
+    }
     const kid = `#${res.playerNumber} ${res.playerName}`;
     if (!res.winners || res.winners.length === 0) {
       return showAmount
@@ -360,6 +387,16 @@ function Landing({ game, log, onGo, onInit }) {
   return (
     <div className="card">
       <p className="slush-total">💰 Slush fund — running total: {money(seasonSlush)}</p>
+      {projection && (
+        <p className="slush-projection">
+          📈 On pace for <strong>~{whole(projection.total)}</strong> this season — about {whole(projection.avg)} a game · {gamesLeft} game{gamesLeft === 1 ? '' : 's'} to go
+        </p>
+      )}
+      {projection && (
+        <p className="slush-projection">
+          🎯 If every family plays every game: <strong>~{whole(projection.sellout)}</strong>
+        </p>
+      )}
       {game ? (
         <p>
           {game.phase === 'open' || game.phase === 'closed' ? (
@@ -384,7 +421,6 @@ function Landing({ game, log, onGo, onInit }) {
           ? `Picks for Foxes vs ${game.opponent || 'TBD'}`
           : 'Picks & winners'}
       </button>
-      <button className="nav-hero" onClick={() => onGo('season')}>🏆 Season standings</button>
       <button className="nav-hero" onClick={() => onGo('gamelog')}>Game Log</button>
       {gameActive && potsBlock}
       {log && log.length > 0 && (
@@ -438,6 +474,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [goaliePick, setGoaliePick] = useState(null);
   const [goalieArm, setGoalieArm] = useState(false);
   const [voidArm, setVoidArm] = useState(false);
+  const [entryOpen, setEntryOpen] = useState(false);
   const [potInputs, setPotInputs] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
 
   // Bank manager
@@ -453,6 +490,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
 
   // Resolve
   const [resolvePick, setResolvePick] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
+  const [rollArm, setRollArm] = useState('');
   // Which category (if any) the organizer is changing after a wrong pick.
   const [changing, setChanging] = useState(null);
 
@@ -469,6 +507,8 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [fixGameSlush, setFixGameSlush] = useState('');
   const [fixSeasonSlush, setFixSeasonSlush] = useState('');
   const [fixBalances, setFixBalances] = useState({});
+  const [showSlushFix, setShowSlushFix] = useState(false);
+  const [gamesLeftInput, setGamesLeftInput] = useState('');
   const [fixBalancesInit, setFixBalancesInit] = useState(false);
   // Two-step in-page confirm for the Fix-the-books saves (no native
   // confirm() — some browsers swallow it): first tap arms, second tap saves.
@@ -745,6 +785,22 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     });
   };
 
+  const rollTap = async (key) => {
+    if (rollArm !== key) { setRollArm(key); return; }
+    setRollArm('');
+    await run(async () => {
+      const { resolution } = (await api.rollCategory(key)).data;
+      flash(`${CATEGORIES.find((c) => c.key === key).label} — no winner. The ${money(resolution.potCents)} pot rolls over to the next game.`);
+    });
+  };
+
+  const unroll = async (key) => {
+    await run(async () => {
+      await api.unrollCategory(key);
+      flash(`${CATEGORIES.find((c) => c.key === key).label} is undecided again.`);
+    });
+  };
+
   const payout = async (key, ticketId, disposition) => {
     await run(async () => {
       await api.setPayout(key, ticketId, disposition);
@@ -828,6 +884,19 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     });
   };
 
+  // Season projection: the organizer sets how many games are left; the
+  // home page does the math (average per game × games left + collected).
+  const saveGamesLeft = async () => {
+    const n = parseInt(gamesLeftInput, 10);
+    if (!Number.isInteger(n) || n < 0 || n > 80) {
+      return fail(new Error('Games left must be a whole number between 0 and 80.'));
+    }
+    await run(async () => {
+      await api.setGamesLeft(n);
+      flash(`Games left set to ${n} — the home page projection is updated.`);
+    });
+  };
+
   // Fix the books: correct one logged game — a winner who was marked paid
   // but actually rolled (or the reverse), and/or the slush that game took in.
   const fixEntry = (log || []).find((e) => `${e.gameDate}|${e.opponent}` === fixKey) || null;
@@ -885,6 +954,8 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     });
   };
 
+  const sentTotalCents = (game.slushPayments || []).reduce((s, p) => s + (p.amountCents || 0), 0);
+
   const payAmanda = async () => {
     if (!game.slushCents || game.slushCents <= 0) return;
     if (!window.confirm(`Send ${money(game.slushCents)} to Amanda? This marks the slush as paid and resets the amount owed to $0.`)) return;
@@ -908,6 +979,10 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   };
 
   const drawMode = game.drawMode || 'mixed';
+
+  if (entryOpen) {
+    return <OrganizerEntry game={game} wallets={wallets} log={log} flash={flash} fail={fail} onBack={() => setEntryOpen(false)} />;
+  }
 
   return (
     <div>
@@ -957,6 +1032,11 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <label>Opponent <input type="text" value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
           {goalieFixBlock}
+          <div>
+            <h3>Enter a play for a parent</h3>
+            <p className="muted small">A parent handed you their picks, or texted them? Enter the play for them right here — no logging into the Parent Portal as their family.</p>
+            <button className="primary" onClick={() => setEntryOpen(true)} disabled={busy}>Enter a play</button>
+          </div>
           <div>
             <h3>Fix the decks</h3>
             <p className="muted small">If this game was opened before a deck rule changed, tap to rebuild the decks from the starting goalie. Cards already drawn stay drawn.</p>
@@ -1071,7 +1151,13 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
             return (
               <div key={key} className="resolve-row">
                 <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)}
-                {res && changing !== key ? (
+                {res && res.noWinner && changing !== key ? (
+                  <span>
+                    {' '}→ <span className="badge rolled">Rolled over — no winner</span>{' '}
+                    {money(res.potCents)} rolls to the next game{' '}
+                    <button className="ghost" onClick={() => unroll(key)}>Undo roll</button>
+                  </span>
+                ) : res && changing !== key ? (
                   <span>
                     {' '}→ #{res.playerNumber} {res.playerName} ·{' '}
                     {res.winners.length === 0 ? (
@@ -1092,6 +1178,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
                     </select>
                     <button onClick={() => resolve(key)} disabled={busy}>{res ? `Update ${label}` : `Resolve ${label}`}</button>
                     {res && <button className="ghost" onClick={() => setChanging(null)}>Cancel</button>}
+                    {!res && <button className="ghost" onClick={() => rollTap(key)} disabled={busy}>{rollArm === key ? 'Tap again to confirm roll over' : 'Roll over — no winner'}</button>}
                   </span>
                 )}
               </div>
@@ -1135,33 +1222,46 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       )}
 
       <div className="card">
-        <h2>Send to Amanda</h2>
-        <p>Season slush owed to Amanda: <strong>{money(game.slushCents)}</strong></p>
+        <h2>Slush fund</h2>
+        <p>Owed to Amanda: <strong>{money(game.slushCents)}</strong> · Sent this season: <strong>{money(sentTotalCents)}</strong></p>
         {game.slushCents > 0 ? (
-          <button className="primary" onClick={payAmanda} disabled={busy}>Send {money(game.slushCents)} to Amanda</button>
+          <p><button className="primary" onClick={payAmanda} disabled={busy}>Send {money(game.slushCents)} to Amanda</button></p>
         ) : (
           <p className="muted">Nothing owed right now.</p>
         )}
-      </div>
-
-      <div className="card">
-        <h2>Paid to Amanda</h2>
-        {(game.slushPayments || []).length > 0 ? (
-          (game.slushPayments || []).map((p, i) => (
-            <div key={i}>{money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}</div>
-          ))
-        ) : (
-          <p className="muted">No payments to Amanda yet.</p>
+        {(game.slushPayments || []).length > 0 && (
+          <div>
+            <h3>Paid to Amanda</h3>
+            {(game.slushPayments || []).map((p, i) => (
+              <div key={i} className="small">{money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}</div>
+            ))}
+          </div>
         )}
+        <p>
+          <button className="ghost" onClick={() => setShowSlushFix(!showSlushFix)}>
+            {showSlushFix ? 'Hide the correction boxes' : 'Correct these numbers'}
+          </button>
+        </p>
+        {showSlushFix && (
+          <div>
+            <p className="muted small">For money that moved outside the app — cash already handed to Amanda. These rewrite the recorded numbers to match.</p>
+            <label>Already sent to Amanda, all season $ <input type="number" min="0" step="0.01" value={fixSent} onChange={(e) => setFixSent(e.target.value)} /></label>
+            <label>Still owed to Amanda $ <input type="number" min="0" step="0.01" value={fixOwed} onChange={(e) => setFixOwed(e.target.value)} /></label>
+            <p><button className="primary" onClick={saveSlushFix} disabled={busy}>{fixArmed === 'slush' ? 'Tap again to confirm' : 'Save slush numbers'}</button></p>
+          </div>
+        )}
+        <h3>Season projection</h3>
+        <p className="muted small">The home page shows families an “on pace for” number — the average slush per game so far × the games left, plus what&apos;s already in. Count every game left: league, tournaments, and playoffs.</p>
+        <p>Games left now: <strong>{game.gamesLeft == null ? 'not set' : game.gamesLeft}</strong></p>
+        <label>Games left this season{' '}
+          <input type="number" min="0" max="80" step="1" value={gamesLeftInput} onChange={(e) => setGamesLeftInput(e.target.value)} />
+        </label>
+        <p><button onClick={saveGamesLeft} disabled={busy}>Set games left</button></p>
       </div>
 
       <div className="card">
         <h2>Fix the books</h2>
-        <p className="muted small">For money that moved outside the app — cash already handed to Amanda, or a winner who rolled instead of taking cash. Corrections here rewrite the recorded numbers to match.</p>
-        <h3>Season slush</h3>
-        <label>Already sent to Amanda, all season $ <input type="number" min="0" step="0.01" value={fixSent} onChange={(e) => setFixSent(e.target.value)} /></label>
-        <label>Still owed to Amanda $ <input type="number" min="0" step="0.01" value={fixOwed} onChange={(e) => setFixOwed(e.target.value)} /></label>
-        <p><button className="primary" onClick={saveSlushFix} disabled={busy}>{fixArmed === 'slush' ? 'Tap again to confirm' : 'Save slush numbers'}</button></p>
+        <p className="muted small">For fixing a game that&apos;s already in the log — a winner who rolled instead of taking cash (or the reverse), or the slush that game took in. Corrections here rewrite the recorded numbers to match.</p>
         <h3>A logged game</h3>
         <label>Game{' '}
           <select value={fixKey} onChange={(e) => pickFixGame(e.target.value)}>
@@ -1238,6 +1338,254 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Organizer play entry: Brandon enters a play for a parent from the
+// Organizer Page — pick the family, pick who's betting, then enter the
+// chips they pulled (real) or tap face-down cards (virtual draw), his
+// choice per play when the game allows both. Same buy engine as the
+// Parent Portal, so every rule (one play per person, deck, scratches,
+// play-now-pay-later) applies exactly the same. Built so he never has to
+// log in and out of the portal as each family at the rink.
+
+function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
+  const [wallet, setWallet] = useState(null);
+  const [bettor, setBettor] = useState('');
+  const [otherName, setOtherName] = useState('');
+  const [selected, setSelected] = useState({ firstGoal: null, firstPenalty: null, playmaker: null });
+  const [mode, setMode] = useState('physical'); // Brandon's main case: the real chips a parent pulled
+  const [busy, setBusy] = useState(false);
+  const [lastTicket, setLastTicket] = useState(null);
+  const [revealId, setRevealId] = useState(null);
+
+  const drawMode = game?.drawMode || 'mixed';
+  const effectiveMode = drawMode === 'mixed' ? mode : drawMode;
+  useEffect(() => {
+    setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
+  }, [drawMode]);
+
+  // Keep the wallet fresh from the live list.
+  useEffect(() => {
+    if (wallet) {
+      const fresh = wallets.find((w) => w.familyId === wallet.familyId);
+      if (fresh) setWallet(fresh);
+    }
+  }, [wallets]);
+
+  const odds = playerOdds(log);
+  const members = wallet ? familyMembers(wallet) : [];
+  const familyTickets = wallet ? (game?.tickets || []).filter((t) => t.familyId === wallet.familyId) : [];
+  const myTicket = bettor ? familyTickets.find((t) => (t.bettor || t.buyer) === bettor) : null;
+  const selectedCount = CATEGORIES.filter((c) => selected[c.key] !== null).length;
+  const price = selectedCount * 2;
+
+  const pickFamily = (w) => {
+    setWallet(w);
+    setOtherName('');
+    setLastTicket(null);
+    setRevealId(null);
+    setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
+    // A one-person family bets as that person automatically.
+    const m = familyMembers(w);
+    setBettor(m.length === 1 ? m[0] : '');
+  };
+
+  const pickBettor = (name) => {
+    setBettor(name);
+    setLastTicket(null);
+    setRevealId(null);
+    setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
+  };
+
+  const pickMode = (m) => {
+    setMode(m);
+    setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
+  };
+
+  const buy = async (payLater = false) => {
+    if (!bettor) return fail(new Error('Pick who is betting first.'));
+    const picks = { ...selected };
+    const count = CATEGORIES.filter((c) => picks[c.key] !== null).length;
+    if (count === 0) {
+      return fail(new Error(effectiveMode === 'physical'
+        ? 'Tap a player in at least one category first.'
+        : 'Tap one card in at least one category first.'));
+    }
+    setBusy(true);
+    try {
+      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, effectiveMode, payLater)).data;
+      setLastTicket(ticket);
+      if (effectiveMode === 'virtual') {
+        setRevealId(ticket.id);
+        setTimeout(() => setRevealId(null), 4000);
+      } else {
+        setRevealId(null);
+      }
+      setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
+      flash(payLater
+        ? `Play entered for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} on Play now pay later.`
+        : `Play entered for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}.`);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!wallet) {
+    return (
+      <div className="card">
+        <button className="ghost" onClick={onBack}>← Organizer Page</button>
+        <h2>Enter a play for a parent</h2>
+        <p className="muted">Tap the family — then pick who&apos;s betting and enter their chips. {(game?.tickets || []).length} play(s) in so far.</p>
+        <div className="deck">
+          {wallets.map((w) => (
+            <button key={w.familyId} onClick={() => pickFamily(w)}>
+              {w.familyLabel}
+              <span className="odds-line">{money(w.balanceCents)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <button className="ghost" onClick={onBack}>← Organizer Page</button>
+      <h2>{wallet.familyLabel}</h2>
+      <p>Wallet balance: <strong>{money(wallet.balanceCents)}</strong></p>
+      <p className="muted">
+        {fmtDate(game.gameDate)} · Foxes vs {game.opponent || 'TBD'} · Goalie #{game.startingGoalie}
+      </p>
+      {(game.scratched || []).length > 0 && (
+        <p className="muted small">Out today: {game.scratched.map((n) => `#${n} ${ROSTER.find((p) => p.number === n)?.name || ''}`).join(', ')}</p>
+      )}
+
+      <h3>Who&apos;s betting?</h3>
+      <div className="row">
+        {members.map((m) => (
+          <button key={m} className={bettor === m ? 'primary' : ''} onClick={() => pickBettor(m)}>{fullName(m, wallet.familyId)}</button>
+        ))}
+      </div>
+      <label>
+        Someone else{' '}
+        <input type="text" placeholder="Type their name" value={otherName} onChange={(e) => setOtherName(e.target.value)} />
+        <button onClick={() => {
+          const n = otherName.trim();
+          if (!n) return fail(new Error('Type a name first'));
+          pickBettor(n);
+          setOtherName('');
+        }}>Use this name</button>
+      </label>
+      {familyTickets.length > 0 && (
+        <p className="muted small">
+          Bets from this family: {familyTickets.map((t) => fullName(t.bettor || t.buyer, t.familyId)).join(', ')}
+        </p>
+      )}
+
+      {!bettor ? (
+        <p className="muted">Pick who&apos;s betting above to enter their picks.</p>
+      ) : myTicket || lastTicket ? (
+        <div>
+          <h3>{bettor}&apos;s play</h3>
+          <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} odds={odds} reveal={revealId !== null && (myTicket || lastTicket)?.id === revealId} />
+          <p className="muted small">One play per person per game — tap another name above to enter a play for someone else in this family.</p>
+        </div>
+      ) : (
+        <div>
+          <h3>Enter {bettor}&apos;s picks</h3>
+          {drawMode === 'mixed' ? (
+            <div className="row">
+              <button className={mode === 'physical' ? 'primary' : ''} onClick={() => pickMode('physical')}>🪙 Real chips</button>
+              <button className={mode === 'virtual' ? 'primary' : ''} onClick={() => pickMode('virtual')}>🎲 Virtual chips</button>
+            </div>
+          ) : (
+            <p className="muted small">
+              {drawMode === 'physical'
+                ? 'This game is set to real chips — tap the player they pulled for each category.'
+                : 'This game is set to the virtual draw — tap the face-down cards below.'}
+            </p>
+          )}
+          {effectiveMode === 'virtual' ? (
+            <p className="muted small">Tap one face-down card per category — $2 per category ($1 to the pot, $1 to the slush). The cards are shuffled — the draw lands when you save.</p>
+          ) : (
+            <p className="muted small">Tap the player they pulled for each category — $2 per category ($1 to the pot, $1 to the slush). Players already drawn are gone from the bag. The % under each player is how often they&apos;ve won that category this season.</p>
+          )}
+          {CATEGORIES.map(({ key, label }) => {
+            const count = game.deckCounts?.[key] ?? 0;
+            if (effectiveMode === 'physical') {
+              const taken = new Set((game.tickets || []).map((t) => t.picks?.[key]?.number).filter((n) => n != null));
+              const available = ROSTER.filter((p) => !taken.has(p.number) && inDraw(p.number, key, game.startingGoalie, game.scratched));
+              return (
+                <div key={key} className="draft-cat">
+                  <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {available.length} chips left
+                  <div className="deck">
+                    {available.map((p) => {
+                      const w = odds.wins[key].get(p.number) || 0;
+                      return (
+                        <button
+                          key={p.number}
+                          className={selected[key] === p.number ? 'picked' : ''}
+                          onClick={() => setSelected({ ...selected, [key]: selected[key] === p.number ? null : p.number })}
+                        >
+                          #{p.number} {p.name}
+                          <span className="odds-line">{oddsPct(w, odds.games)}% · {w} win{w === 1 ? '' : 's'}</span>
+                        </button>
+                      );
+                    })}
+                    {available.length === 0 && (
+                      <span className="muted small"> No chips left in the bag for this one — switch to virtual or skip it.</span>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={key} className="draft-cat">
+                <strong>{label}</strong> — pot {money(game.pots?.[key] || 0)} · {count} cards left
+                <div className="deck">
+                  {Array.from({ length: count }, (_, i) => (
+                    <button
+                      key={i}
+                      className={`card-back ${selected[key] === i ? 'picked' : ''}`}
+                      onClick={() => setSelected({ ...selected, [key]: selected[key] === i ? null : i })}
+                    >
+                      ?
+                    </button>
+                  ))}
+                  {count === 0 && (
+                    <span>
+                      <button
+                        className={`card-back ${selected[key] === -1 ? 'picked' : ''}`}
+                        onClick={() => setSelected({ ...selected, [key]: selected[key] === -1 ? null : -1 })}
+                      >?</button>
+                      <span className="muted small"> Deck is out — draws any player.</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <p>
+            <button className="primary" onClick={() => buy(false)} disabled={busy || selectedCount === 0}>
+              Save play for {bettor} — ${price}.00
+            </button>
+          </p>
+          {wallet.balanceCents < price * 100 && (
+            <p>
+              <button className="ghost" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
+                Play now pay later — ${price}.00
+              </button>
+              <span className="muted small"> Their wallet is short — this play goes through and the balance goes negative until they pay you.</span>
+            </p>
+          )}
+        </div>
+      )}
+      <button className="ghost" onClick={() => { setWallet(null); setBettor(''); setOtherName(''); }}>Switch family</button>
+    </div>
+  );
+}
+
 function ParentPortal({ game, wallets, log, flash, fail }) {
   const [pin, setPin] = useState('');
   const [wallet, setWallet] = useState(null);
@@ -1248,6 +1596,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
   const [bettor, setBettor] = useState('');
   const [otherName, setOtherName] = useState('');
   const [mode, setMode] = useState('virtual'); // 'virtual' (app draws) | 'physical' (real chip from the bag)
+  const [showStandings, setShowStandings] = useState(false);
 
   // The organizer may have locked the game to one draw method. The
   // effective mode is the game's mode when locked, otherwise the parent's
@@ -1359,6 +1708,8 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
             ? 'The draft is closed — the game has started. Good luck!'
             : 'No game is open right now — check back before puck drop.'}
         </p>
+        <button className="nav-hero" onClick={() => setShowStandings(!showStandings)}>🏆 Season standings</button>
+        {showStandings && <SeasonStandings game={game} log={log} />}
         <button className="ghost" onClick={() => setWallet(null)}>Switch family</button>
       </div>
     );
@@ -1500,6 +1851,8 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
           )}
         </div>
       )}
+      <button className="nav-hero" onClick={() => setShowStandings(!showStandings)}>🏆 Season standings</button>
+      {showStandings && <SeasonStandings game={game} log={log} />}
       <button className="ghost" onClick={() => { setWallet(null); setBettor(''); setOtherName(''); }}>Switch family</button>
     </div>
   );
@@ -1552,10 +1905,14 @@ function Board({ game, flash, fail }) {
                   <span> (rolled over — starting pot for the next game)</span>
                 ) : null}
                 {isOpen && res && (
-                  <span>
-                    {' '}→ #{res.playerNumber} {res.playerName}{' '}
-                    {res.winners.length === 0 ? <span className="badge rolled">Rollover</span> : null}
-                  </span>
+                  res.noWinner ? (
+                    <span> <span className="badge rolled">Rolled over — no winner</span></span>
+                  ) : (
+                    <span>
+                      {' '}→ #{res.playerNumber} {res.playerName}{' '}
+                      {res.winners.length === 0 ? <span className="badge rolled">Rollover</span> : null}
+                    </span>
+                  )
                 )}
               </div>
             );
@@ -1635,10 +1992,14 @@ function GameLogPage({ log }) {
                       <strong>{label}</strong>: pot {money(entry.pots?.[key] || 0)}
                       {entry.rollovers?.[key] ? ` · rolled over ${money(entry.rollovers[key])}` : ''}
                       {entry.resolutions?.[key] && (
-                        <span>
-                          {' '}→ #{entry.resolutions[key].playerNumber} {entry.resolutions[key].playerName}
-                          {entry.resolutions[key].winners.length === 0 ? ' (nobody picked)' : ''}
-                        </span>
+                        entry.resolutions[key].playerNumber ? (
+                          <span>
+                            {' '}→ #{entry.resolutions[key].playerNumber} {entry.resolutions[key].playerName}
+                            {entry.resolutions[key].winners.length === 0 ? ' (nobody picked)' : ''}
+                          </span>
+                        ) : (
+                          <span> (no winner — rolled over)</span>
+                        )
                       )}
                       {!entry.resolutions?.[key] && <span> (undecided)</span>}
                     </div>
@@ -1688,7 +2049,9 @@ function GameLogPage({ log }) {
 // game in progress (if one is open). All of it is added up here in the
 // browser from the same game / log / wallet data the rest of the app
 // already loads — nothing extra is stored.
-function SeasonPage({ game, log, wallets }) {
+// The standings body — shared by the standalone Season page and the
+// Parent Portal (Brandon moved the standings under the portal Nov 15, 2026).
+function SeasonStandings({ game, log }) {
   const inProgress = game && (game.phase === 'open' || game.phase === 'closed');
   const sources = [];
   if (inProgress) sources.push({ tickets: game.tickets || [], resolutions: game.resolutions || {} });
@@ -1762,8 +2125,7 @@ function SeasonPage({ game, log, wallets }) {
     playerWins[key] = [...byPlayer.values()].sort((a, b) => b.wins - a.wins || a.number - b.number);
   }
   return (
-    <div className="card">
-      <h2>🏆 Season standings</h2>
+    <>
       <p className="muted small">
         {gamesCount === 0
           ? 'No games yet — standings appear after the first game.'
@@ -1805,7 +2167,16 @@ function SeasonPage({ game, log, wallets }) {
           </div>
         ))}
       </div>
+    </>
+  );
+}
 
+// Standalone wrapper — keeps the old 'season' route working.
+function SeasonPage({ game, log, wallets }) {
+  return (
+    <div className="card">
+      <h2>🏆 Season standings</h2>
+      <SeasonStandings game={game} log={log} />
     </div>
   );
 }

@@ -56,6 +56,8 @@ export const api = {
     post('game', withPassword({ action: 'setCarryover', category, amountCents })),
   setDrawMode: (drawMode) =>
     post('game', withPassword({ action: 'setDrawMode', drawMode })),
+  setGamesLeft: (gamesLeft) =>
+    post('game', withPassword({ action: 'setGamesLeft', gamesLeft })),
   setScratched: (scratched) =>
     post('game', withPassword({ action: 'setScratched', scratched })),
   openGame: (gameDate, opponent, startingGoalie) =>
@@ -67,6 +69,10 @@ export const api = {
     post('game', withPassword({ action: 'setStartingGoalie', startingGoalie })),
   resolveCategory: (category, playerNumber) =>
     post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
+  rollCategory: (category) =>
+    post('resolve', withPassword({ action: 'roll', category })),
+  unrollCategory: (category) =>
+    post('resolve', withPassword({ action: 'unroll', category })),
   setPayout: (category, ticketId, disposition) =>
     post('resolve', withPassword({ action: 'setPayout', category, ticketId, disposition })),
   resetGame: () => post('game', withPassword({ action: 'resetGame' })),
