@@ -463,6 +463,10 @@ function Landing({ game, wallets, log, onGo, onInit }) {
       )}
       {!gameActive && potsBlock}
       <button className="nav-hero" onClick={() => onGo('organizer')}>Organizer Page</button>
+      <div className="qr-block">
+        <img src="/qr-app.png" alt="QR code that opens this app" width="132" height="132" />
+        <p className="muted small">📱 Scan to open the app — handy at the rink</p>
+      </div>
       {!game && (
         <p>
           <button className="ghost" onClick={onInit}>Seed the app (organizer)</button>
