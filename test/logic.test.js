@@ -1026,3 +1026,24 @@ test('gamesLeft survives a backup round-trip and clears on factory reset', () =>
   factoryReset(restored);
   assert.equal(restored.gamesLeft, null);
 });
+
+test('resetGame counts the projection games-left down as games are logged', () => {
+  const state = fundedGame();
+  setGamesLeft(state, 24);
+  buyFullTicket(state, '22', 'Trish');
+  const r = resetGame(state);
+  assert.equal(r.logged, true);
+  assert.equal(state.gamesLeft, 23);
+});
+
+test('gamesLeft countdown floors at zero and leaves an unset count alone', () => {
+  const a = fundedGame();
+  setGamesLeft(a, 0);
+  buyFullTicket(a, '22', 'Trish');
+  resetGame(a);
+  assert.equal(a.gamesLeft, 0);
+  const b = fundedGame();
+  buyFullTicket(b, '22', 'Trish');
+  resetGame(b);
+  assert.equal(b.gamesLeft, null);
+});
