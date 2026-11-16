@@ -126,6 +126,7 @@ async function loadState(firestore, tx) {
       tickets: g.tickets || [],
       slushCents: g.slushCents || 0,
       slushPayments: g.slushPayments || [],
+      gamesLeft: g.gamesLeft ?? null,
       log: [],
     };
   }
@@ -163,6 +164,7 @@ function saveState(firestore, tx, state, gameId) {
     tickets: state.tickets,
     slushCents: state.slushCents,
     slushPayments: state.slushPayments || [],
+    gamesLeft: state.gamesLeft ?? null,
   });
   tx.set(firestore.doc(DECKS_DOC), { gameId, decks: state.game.decks });
   for (const [id, w] of Object.entries(state.wallets)) {
