@@ -28,6 +28,20 @@ const CATEGORIES = [
   { key: 'playmaker', label: 'Playmaker' },
 ];
 
+// Picks are stored two ways: plays entered in the app carry { number, name },
+// while the 12 dashboard-imported games in the Game Log carry just the jersey
+// number. Normalize either shape to { number, name } for display, looking the
+// name up on the roster when only the number was stored.
+const ROSTER_BY_NUMBER = new Map(ROSTER.map((p) => [p.number, p]));
+function pickPlayer(pick) {
+  if (pick == null) return null;
+  if (typeof pick === 'number') {
+    const p = ROSTER_BY_NUMBER.get(pick);
+    return { number: pick, name: p ? p.name : '' };
+  }
+  return pick;
+}
+
 // Show a parent's full name. The stored bettor is often just a first name
 // ("Lauren", "Tim") — the family's last name comes from the roster entry for
 // the bettor's family (familyId = the kid's jersey number). A name that
@@ -171,7 +185,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout, odds, reveal }) {
       </div>
       <div className="picks">
         {CATEGORIES.map(({ key, label }, i) => {
-          const pick = ticket.picks?.[key];
+          const pick = pickPlayer(ticket.picks?.[key]);
           const res = game?.resolutions?.[key];
           const isWinner = res && pick && res.playerNumber === pick.number;
           const w = odds && pick ? odds.wins[key].get(pick.number) || 0 : null;
@@ -1866,7 +1880,7 @@ function picksByCategory(game, key) {
   // Board reads "who picked which player" instead of one card per person.
   const byNumber = new Map();
   (game.tickets || []).forEach((t) => {
-    const pick = t.picks?.[key];
+    const pick = pickPlayer(t.picks?.[key]);
     if (!pick) return;
     const bettor = t.bettor || t.buyer;
     if (!byNumber.has(pick.number)) {
@@ -2016,7 +2030,7 @@ function GameLogPage({ log }) {
                     </div>
                     <div className="picks">
                       {CATEGORIES.map(({ key, label }) => {
-                        const pick = t.picks?.[key];
+                        const pick = pickPlayer(t.picks?.[key]);
                         const res = entry.resolutions?.[key];
                         const isWinner = res && pick && res.playerNumber === pick.number;
                         const w = res?.winners.find((x) => x.ticketId === t.id);
