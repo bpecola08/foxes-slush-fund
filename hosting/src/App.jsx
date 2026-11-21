@@ -341,7 +341,7 @@ export default function App() {
       )}
       {view === 'organizer' && <OrganizerPage game={game} wallets={walletList} log={log} flash={flash} fail={fail} />}
       {view === 'parent' && <ParentPortal game={game} wallets={walletList} log={log} flash={flash} fail={fail} />}
-      {view === 'board' && <Board game={game} flash={flash} fail={fail} />}
+      {view === 'board' && <Board game={game} odds={playerOdds(log)} flash={flash} fail={fail} />}
       {view === 'gamelog' && <GameLogPage log={log} />}
       {view === 'season' && <SeasonPage game={game} log={log} wallets={walletList} />}
     </div>
@@ -1988,7 +1988,7 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
 
 // ---------------------------------------------------------------------------
 
-function picksByCategory(game, key) {
+function picksByCategory(game, key, odds) {
   // Group every play's pick for one category by player number, so the
   // Board reads "who picked which player" instead of one card per person.
   const byNumber = new Map();
@@ -2001,10 +2001,17 @@ function picksByCategory(game, key) {
     }
     byNumber.get(pick.number).bettors.push(fullName(bettor, t.familyId));
   });
-  return [...byNumber.values()].sort((a, b) => a.number - b.number);
+  // Best percentage on top (Brandon, Nov 21, 2026): within a category,
+  // the picked players sort by their season win % for that category —
+  // the same ghost-win rate the chips show — so the likeliest winners
+  // float to the top. Ties: more bettors first, then lower number.
+  const pctOf = (n) => (odds ? oddsPct(odds.wins[key].get(n) || 0, odds.games) : 0);
+  return [...byNumber.values()]
+    .map((row) => ({ ...row, pct: pctOf(row.number) }))
+    .sort((a, b) => b.pct - a.pct || b.bettors.length - a.bettors.length || a.number - b.number);
 }
 
-function Board({ game, flash, fail }) {
+function Board({ game, odds, flash, fail }) {
   if (!game) return <div className="card"><p>Loading…</p></div>;
   const isOpen = game.phase === 'open' || game.phase === 'closed';
   return (
@@ -2055,7 +2062,7 @@ function Board({ game, flash, fail }) {
           ) : (
             CATEGORIES.map(({ key, label }) => {
               const res = game.resolutions?.[key];
-              const picks = picksByCategory(game, key);
+              const picks = picksByCategory(game, key, odds);
               return (
                 <div key={key} className="category-picks">
                   <h4>
@@ -2073,7 +2080,7 @@ function Board({ game, flash, fail }) {
                       const isWinner = res && res.playerNumber === p.number;
                       return (
                         <div key={p.number} className={`pick-row ${isWinner ? 'winner' : ''}`}>
-                          <span>#{p.number} {p.name}</span>
+                          <span>#{p.number} {p.name} <span className="muted small">· {p.pct}% this season</span></span>
                           <span>{p.bettors.join(', ')}</span>
                           {isWinner && <span className="win-star"> ★ Winner</span>}
                         </div>
