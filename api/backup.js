@@ -16,10 +16,13 @@
 //              Corrects the season slush position to match money that moved
 //              outside the app (see logic.correctSlush).
 //   fixLogGame: { gameDate, opponent, category?, disposition?,
-//                 slushGameCents?, slushSeasonCents? }
+//                 playerNumber?, slushGameCents?, slushSeasonCents? }
 //              -> { walletDeltaCents }
 //              Corrects one logged game: re-mark a winner paid <-> rolled
-//              (moving the payout in or out of that family's wallet) and/or
+//              (moving the payout in or out of that family's wallet), set
+//              the winner of a category that was logged as a no-winner
+//              rollover (playerNumber — the rolled pot comes back out of
+//              the next game's carryover so it is not paid twice), and/or
 //              set the slush recorded for that game.
 const { handler } = require('./_lib/http');
 const db = require('./_lib/db');
@@ -146,11 +149,23 @@ module.exports = handler(async (body) => {
     return { updated, skipped };
   }
   if (action === 'fixLogGame') {
-    const { gameDate, opponent, category, disposition } = body || {};
+    const { gameDate, opponent, category, disposition, playerNumber } = body || {};
     if (typeof gameDate !== 'string' || !gameDate || typeof opponent !== 'string' || !opponent) {
       throw new Error('gameDate and opponent are required.');
     }
-    const hasDisposition = category !== undefined || disposition !== undefined;
+    const hasSetWinner = playerNumber !== undefined;
+    const hasDisposition = !hasSetWinner && (category !== undefined || disposition !== undefined);
+    if (hasSetWinner) {
+      if (!logic.CATEGORIES.includes(category)) {
+        throw new Error(`Unknown category: ${category}`);
+      }
+      if (disposition !== 'paid' && disposition !== 'rolled') {
+        throw new Error("Disposition must be 'paid' or 'rolled'.");
+      }
+      if (!Number.isInteger(playerNumber)) {
+        throw new Error('playerNumber must be a whole number.');
+      }
+    }
     if (hasDisposition) {
       if (!logic.CATEGORIES.includes(category)) {
         throw new Error(`Unknown category: ${category}`);
@@ -165,8 +180,8 @@ module.exports = handler(async (body) => {
         throw new Error(`${key} must be a whole number of cents, $0 or more.`);
       }
     }
-    if (!hasDisposition && !hasSlush) {
-      throw new Error('Nothing to fix: give a winner disposition and/or slush amounts.');
+    if (!hasDisposition && !hasSetWinner && !hasSlush) {
+      throw new Error('Nothing to fix: give a winner disposition, a winner to set, and/or slush amounts.');
     }
     const firestore = db.db();
     return firestore.runTransaction(async (tx) => {
@@ -179,6 +194,58 @@ module.exports = handler(async (body) => {
       const entry = { ...doc.data() };
       const walletWrites = [];
       let walletDeltaCents = 0;
+      let gameUpdate = null;
+      let paidOutCents = 0;
+      if (hasSetWinner) {
+        const fix = logic.computeLogWinner(entry, category, playerNumber);
+        const res = {
+          ...fix.resolution,
+          winners: fix.resolution.winners.map((w) => ({ ...w, disposition })),
+        };
+        entry.resolutions = { ...entry.resolutions, [category]: res };
+        paidOutCents = fix.paidOutCents;
+        if (entry.rollovers && Number.isInteger(entry.rollovers[category])) {
+          entry.rollovers = {
+            ...entry.rollovers,
+            [category]: Math.max(0, entry.rollovers[category] - paidOutCents),
+          };
+        }
+        if (paidOutCents > 0) {
+          // The pot that rolled is still sitting in the next game's
+          // carryover — take it back out so it is not paid twice. Only
+          // valid between games (phase 'setup'), before the carryover
+          // has been baked into a live game's pots.
+          const gameSnap = await tx.get(firestore.doc('state/game'));
+          if (gameSnap.exists) {
+            const g = gameSnap.data();
+            if (g.phase && g.phase !== 'setup') {
+              throw new Error('A game is already open — set this winner before opening the next game, so the rolled pot is not paid twice.');
+            }
+            const carryover = { ...(g.carryover || {}) };
+            const pots = { ...(g.pots || {}) };
+            carryover[category] = Math.max(0, (carryover[category] || 0) - paidOutCents);
+            pots[category] = Math.max(0, (pots[category] || 0) - paidOutCents);
+            gameUpdate = { carryover, pots };
+          }
+          if (disposition === 'rolled') {
+            const deltas = {};
+            for (const w of res.winners) {
+              if (w.familyId && w.payoutCents > 0) {
+                deltas[w.familyId] = (deltas[w.familyId] || 0) + w.payoutCents;
+              }
+            }
+            for (const [familyId, delta] of Object.entries(deltas)) {
+              const ref = firestore.doc(`wallets/${familyId}`);
+              const wSnap = await tx.get(ref);
+              walletWrites.push({
+                ref,
+                balanceCents: (wSnap.exists ? wSnap.data().balanceCents || 0 : 0) + delta,
+              });
+              walletDeltaCents += delta;
+            }
+          }
+        }
+      }
       if (hasDisposition) {
         const res = entry.resolutions && entry.resolutions[category];
         const winners = (res && res.winners) || [];
@@ -217,8 +284,9 @@ module.exports = handler(async (body) => {
       }
       if (body.slushSeasonCents !== undefined) entry.slushSeasonCents = body.slushSeasonCents;
       tx.set(doc.ref, entry);
+      if (gameUpdate) tx.update(firestore.doc('state/game'), gameUpdate);
       for (const w of walletWrites) tx.update(w.ref, { balanceCents: w.balanceCents });
-      return { walletDeltaCents };
+      return { walletDeltaCents, paidOutCents };
     });
   }
   throw new Error(`Unknown backup action: ${action}`);

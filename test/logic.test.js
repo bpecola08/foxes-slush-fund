@@ -7,7 +7,7 @@ const logic = require('../lib/logic');
 const { hashPassword, verifyPassword } = require('../lib/auth');
 
 const { createInitialState, deposit, buyTicket, resolveCategory, rollCategory, unrollCategory, setPayout,
-  resetGame, voidGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setStartingGoalie, transferPick, setCarryover, setGameInfo, payAmanda, setDrawMode, setGamesLeft, setScratched, buildBackup, applyBackup, validateImportEntries, correctSlush, logFixDelta, setWalletBalances } = logic;
+  resetGame, voidGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setStartingGoalie, transferPick, setCarryover, setGameInfo, payAmanda, setDrawMode, setGamesLeft, setScratched, buildBackup, applyBackup, validateImportEntries, correctSlush, logFixDelta, computeLogWinner, setWalletBalances } = logic;
 
 // Deterministic RNG (LCG) so shuffles are reproducible in tests.
 function seededRng(seed = 42) {
@@ -1056,6 +1056,58 @@ test('logFixDelta is 0 for a rolled-over pot or a missing winner', () => {
   assert.equal(logFixDelta(null, 'rolled'), 0);
   assert.equal(logFixDelta({ buyer: null, familyId: null, payoutCents: 1200, disposition: 'rolled' }, 'paid'), 0);
   assert.throws(() => logFixDelta({ buyer: 'X', familyId: '58', payoutCents: 100, disposition: 'paid' }, 'unmarked'), /paid.*rolled/);
+});
+
+// A logged game whose First Penalty was recorded as a no-winner rollover,
+// with the game's plays as they were stored in the log.
+const logEntryWithRoll = () => ({
+  gameDate: '2026-11-21',
+  opponent: 'Allegheny Badgers',
+  resolutions: {
+    firstPenalty: { noWinner: true, winners: [], potCents: 1000, playerNumber: null, rollover: true, playerName: null },
+  },
+  rollovers: { firstPenalty: 1000 },
+  tickets: [
+    { id: 't1', buyer: 'Brad', family: 'Amanda & Brad', familyId: '98', picks: { firstPenalty: { name: 'Blake Beatty', number: 58 } } },
+    { id: 't2', buyer: 'Diane', family: 'Diane & Brian', familyId: '16', picks: { firstPenalty: { name: 'Carter Heichel', number: 20 } } },
+  ],
+});
+
+test('computeLogWinner fills a no-winner rollover from the game plays', () => {
+  const { resolution, paidOutCents } = computeLogWinner(logEntryWithRoll(), 'firstPenalty', 58);
+  assert.equal(resolution.playerName, 'Blake Beatty');
+  assert.equal(resolution.playerNumber, 58);
+  assert.equal(resolution.rollover, false);
+  assert.equal(resolution.winners.length, 1);
+  assert.equal(resolution.winners[0].buyer, 'Brad');
+  assert.equal(resolution.winners[0].familyId, '98');
+  assert.equal(resolution.winners[0].payoutCents, 1000);
+  assert.equal(paidOutCents, 1000);
+});
+
+test('computeLogWinner splits the pot across winning plays, remainder first', () => {
+  const e = logEntryWithRoll();
+  e.tickets.push({ id: 't3', buyer: 'Jeff', family: 'Kahla & Jeffrey', familyId: '58', picks: { firstPenalty: { name: 'Blake Beatty', number: 58 } } });
+  e.resolutions.firstPenalty.potCents = 1001;
+  const { resolution, paidOutCents } = computeLogWinner(e, 'firstPenalty', 58);
+  assert.deepEqual(resolution.winners.map((w) => w.payoutCents), [501, 500]);
+  assert.equal(paidOutCents, 1001);
+});
+
+test('computeLogWinner names a player nobody picked and keeps the pot rolled', () => {
+  const { resolution, paidOutCents } = computeLogWinner(logEntryWithRoll(), 'firstPenalty', 19);
+  assert.equal(resolution.playerName, 'Alex Vrcek');
+  assert.equal(resolution.winners.length, 0);
+  assert.equal(resolution.rollover, true);
+  assert.equal(paidOutCents, 0);
+});
+
+test('computeLogWinner refuses a category that already has a winner', () => {
+  const e = logEntryWithRoll();
+  e.resolutions.firstPenalty = { playerName: 'Carter Heichel', playerNumber: 20, potCents: 1000, rollover: false, winners: [{ buyer: 'A', familyId: '1', payoutCents: 1000 }] };
+  assert.throws(() => computeLogWinner(e, 'firstPenalty', 58), /already has a winner/);
+  assert.throws(() => computeLogWinner(logEntryWithRoll(), 'firstPenalty', 999), /Unknown player/);
+  assert.throws(() => computeLogWinner(logEntryWithRoll(), 'powerPlay', 58), /Unknown category/);
 });
 
 test('setWalletBalances sets exact balances, including negatives, in one pass', () => {

@@ -577,6 +577,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [fixGameSlush, setFixGameSlush] = useState('');
   const [fixSeasonSlush, setFixSeasonSlush] = useState('');
   const [fixBalances, setFixBalances] = useState({});
+  const [fixWinnerPick, setFixWinnerPick] = useState({});
   const [showSlushFix, setShowSlushFix] = useState(false);
   const [gamesLeftInput, setGamesLeftInput] = useState('');
   const [fixBalancesInit, setFixBalancesInit] = useState(false);
@@ -1039,9 +1040,38 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const fixEntry = (log || []).find((e) => `${e.gameDate}|${e.opponent}` === fixKey) || null;
   const pickFixGame = (key) => {
     setFixKey(key);
+    setFixWinnerPick({});
+    setFixArmed('');
     const e = (log || []).find((x) => `${x.gameDate}|${x.opponent}` === key);
     setFixGameSlush(e ? String((e.slushGameCents || 0) / 100) : '');
     setFixSeasonSlush(e ? String((e.slushSeasonCents || 0) / 100) : '');
+  };
+  // Fix the books: a category was logged as a no-winner rollover, but the
+  // organizer later learned who actually did it. Setting the winner pays
+  // the rolled pot to whoever picked him (server takes the pot back out
+  // of the next game's carryover); if nobody picked him, he is just named
+  // and the pot stays rolled.
+  const setLogWinner = async (entry, category, disposition) => {
+    const num = parseInt(fixWinnerPick[category] || '', 10);
+    const player = ROSTER_BY_NUMBER.get(num);
+    if (!player) return fail(new Error('Pick who did it first.'));
+    const catLabel = (CATEGORIES.find((c) => c.key === category) || {}).label || category;
+    const res = entry.resolutions && entry.resolutions[category];
+    const pot = (res && res.potCents) || 0;
+    const wins = (entry.tickets || []).filter((t) => t.picks && t.picks[category] && t.picks[category].number === num);
+    const armKey = `setw:${category}:${disposition}`;
+    if (fixArmed !== armKey) {
+      setFixArmed(armKey);
+      flash(wins.length
+        ? `Check, then tap the same button again to confirm: #${num} ${player.name} set as the ${catLabel} winner vs ${entry.opponent} — the ${money(pot)} pot goes to ${wins.map((t) => t.buyer).join(', ')} (${disposition === 'rolled' ? 'into their account' : 'marked paid out'}), and comes out of the next game's carryover so it isn't paid twice.`
+        : `Check, then tap the same button again to confirm: #${num} ${player.name} named as the ${catLabel} player vs ${entry.opponent} — nobody picked him, so the ${money(pot)} pot stays rolled over.`);
+      return;
+    }
+    setFixArmed('');
+    await run(async () => {
+      await api.fixLogGame({ gameDate: entry.gameDate, opponent: entry.opponent, category, playerNumber: num, disposition });
+      flash(`#${num} ${player.name} set as the ${catLabel} winner vs ${entry.opponent}.`);
+    });
   };
   const flipWinner = async (entry, category, winner, disposition) => {
     const label = disposition === 'rolled' ? 'rolled into their account' : 'paid';
@@ -1409,7 +1439,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
 
       <div className="card">
         <h2>Fix the books</h2>
-        <p className="muted small">For fixing a game that&apos;s already in the log — a winner who rolled instead of taking cash (or the reverse), or the slush that game took in. Corrections here rewrite the recorded numbers to match.</p>
+        <p className="muted small">For fixing a game that&apos;s already in the log — a winner who rolled instead of taking cash (or the reverse), setting the winner of a category that was rolled over by mistake, or the slush that game took in. Corrections here rewrite the recorded numbers to match.</p>
         <h3>A logged game</h3>
         <label>Game{' '}
           <select value={fixKey} onChange={(e) => pickFixGame(e.target.value)}>
@@ -1432,6 +1462,55 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
                   </button>
                 </p>
               ));
+            })}
+            {CATEGORIES.map(({ key, label }) => {
+              const res = fixEntry.resolutions && fixEntry.resolutions[key];
+              if (!res || (res.winners || []).length > 0) return null;
+              const tickets = fixEntry.tickets || [];
+              const pickedNums = [...new Set(tickets.map((t) => t.picks && t.picks[key] && t.picks[key].number).filter((n) => Number.isInteger(n)))];
+              const picked = pickedNums.map((n) => ROSTER_BY_NUMBER.get(n)).filter(Boolean).sort((a, b) => a.number - b.number);
+              const unpicked = ROSTER.filter((p) => !pickedNums.includes(p.number));
+              const sel = fixWinnerPick[key] || '';
+              const selPlayer = sel ? ROSTER_BY_NUMBER.get(parseInt(sel, 10)) : null;
+              const selWins = selPlayer ? tickets.filter((t) => t.picks && t.picks[key] && t.picks[key].number === selPlayer.number) : [];
+              return (
+                <div key={`setw-${key}`} className="small">
+                  <p>{label}: <span className="badge rolled">Rolled over — no winner</span> · pot {money(res.potCents || 0)}</p>
+                  <label>Who actually did it?{' '}
+                    <select value={sel} onChange={(e) => { setFixWinnerPick((s) => ({ ...s, [key]: e.target.value })); setFixArmed(''); }}>
+                      <option value="">Pick a player…</option>
+                      {picked.length > 0 && (
+                        <optgroup label="Picked in this game">
+                          {picked.map((p) => (
+                            <option key={p.number} value={p.number}>#{p.number} {p.name} — picked by {tickets.filter((t) => t.picks && t.picks[key] && t.picks[key].number === p.number).map((t) => t.buyer).join(', ')}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label="Nobody picked him">
+                        {unpicked.map((p) => (
+                          <option key={p.number} value={p.number}>#{p.number} {p.name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </label>
+                  {selPlayer && (selWins.length > 0 ? (
+                    <p>
+                      <button className="ghost" disabled={busy} onClick={() => setLogWinner(fixEntry, key, 'paid')}>
+                        {fixArmed === `setw:${key}:paid` ? 'Tap again to confirm' : `Set winner — ${money(res.potCents || 0)} paid out`}
+                      </button>{' '}
+                      <button className="ghost" disabled={busy} onClick={() => setLogWinner(fixEntry, key, 'rolled')}>
+                        {fixArmed === `setw:${key}:rolled` ? 'Tap again to confirm' : `Set winner — ${money(res.potCents || 0)} into their account`}
+                      </button>
+                    </p>
+                  ) : (
+                    <p>
+                      <button className="ghost" disabled={busy} onClick={() => setLogWinner(fixEntry, key, 'rolled')}>
+                        {fixArmed === `setw:${key}:rolled` ? 'Tap again to confirm' : 'Set as the player who did it (pot stays rolled)'}
+                      </button>
+                    </p>
+                  ))}
+                </div>
+              );
             })}
             <label>Slush collected this game $ <input type="number" min="0" step="0.01" value={fixGameSlush} onChange={(e) => setFixGameSlush(e.target.value)} /></label>
             <label>Season slush total after this game $ <input type="number" min="0" step="0.01" value={fixSeasonSlush} onChange={(e) => setFixSeasonSlush(e.target.value)} /></label>
