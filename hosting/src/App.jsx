@@ -1376,7 +1376,12 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <div>
             <h3>Paid to Amanda</h3>
             {(game.slushPayments || []).map((p, i) => (
-              <div key={i} className="small">{money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}</div>
+              <div key={i} className="small">
+                {money(p.amountCents)} — {new Date(p.paidAt).toLocaleDateString()}
+                {(p.games || []).map((g, j) => (
+                  <div key={j} className="muted">For the {g.gameDate ? new Date(`${g.gameDate}T12:00:00`).toLocaleDateString() : ''} game vs {g.opponent || 'TBD'} — {money(g.slushGameCents)}</div>
+                ))}
+              </div>
             ))}
           </div>
         )}

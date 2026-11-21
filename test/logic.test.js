@@ -711,6 +711,30 @@ test('slush accumulates across games and is never touched by resets', () => {
   assert.equal(state.log[1].slushSeasonCents, 300);
 });
 
+test('payAmanda records which games the payment covers; the next payment covers only newer games', () => {
+  const state = createInitialState();
+  deposit(state, '22', 2000);
+  openGame(state, { gameDate: '2026-11-14', opponent: 'Johnstown', startingGoalie: 88, rng: seededRng() });
+  buyFullTicket(state, '22', 'Trish'); // $3 of slush
+  resetGame(state);
+  assert.deepEqual(state.slushPendingGames, [
+    { gameDate: '2026-11-14', opponent: 'Johnstown', slushGameCents: 300 },
+  ]);
+  const p1 = payAmanda(state);
+  assert.equal(p1.paidCents, 300);
+  assert.equal(state.slushPayments[0].games.length, 1);
+  assert.equal(state.slushPayments[0].games[0].opponent, 'Johnstown');
+  assert.deepEqual(state.slushPendingGames, []);
+
+  openGame(state, { gameDate: '2026-11-15', opponent: 'North Pittsburgh', startingGoalie: 29, rng: seededRng(3) });
+  buyFullTicket(state, '22', 'Trish');
+  resetGame(state);
+  payAmanda(state);
+  assert.equal(state.slushPayments[0].games.length, 1);
+  assert.equal(state.slushPayments[0].games[0].opponent, 'North Pittsburgh');
+  assert.equal(state.slushPayments[1].games[0].opponent, 'Johnstown');
+});
+
 test('payAmanda records the payment and resets the slush owed to $0', () => {
   const state = createInitialState();
   deposit(state, '22', 5000);
