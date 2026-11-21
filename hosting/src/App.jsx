@@ -509,10 +509,6 @@ function Landing({ game, wallets, log, onGo, onInit }) {
       )}
       {!gameActive && potsBlock}
       <button className="nav-hero" onClick={() => onGo('organizer')}>Organizer Page</button>
-      <div className="qr-block">
-        <img src="/qr-app.png" alt="QR code that opens this app" width="132" height="132" />
-        <p className="muted small">📱 Scan to open the app — handy at the rink</p>
-      </div>
       {!game && (
         <p>
           <button className="ghost" onClick={onInit}>Seed the app (organizer)</button>
@@ -1822,6 +1818,15 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
   // button. Physical mode only — virtual selections are face-down deck
   // positions, so no player is known until the draw.
   const liveShot = effectiveMode === 'physical' ? winShot(selected, odds) : null;
+  // Every play this family has in the current game, shown the moment the
+  // family opens (Brandon, Nov 21, 2026) — merged into one list, no need
+  // to tap a name first just to see the picks. Plays stay per person
+  // (multiple parents can bet); this only merges the view. Includes a
+  // just-bought play (lastTicket) until the live snapshot catches up,
+  // deduped by id.
+  const familyPlays = lastTicket && !familyTickets.some((t) => t.id === lastTicket.id)
+    ? [...familyTickets, lastTicket]
+    : familyTickets;
 
   return (
     <div className="card">
@@ -1833,6 +1838,15 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
       </p>
       {(game.scratched || []).length > 0 && (
         <p className="muted small">Out today: {game.scratched.map((n) => `#${n} ${ROSTER.find((p) => p.number === n)?.name || ''}`).join(', ')}</p>
+      )}
+
+      {familyPlays.length > 0 && (
+        <div>
+          <h3>Your family&apos;s plays</h3>
+          {familyPlays.map((t) => (
+            <TicketCard key={t.id} ticket={t} game={game} showPayouts={false} odds={odds} reveal={revealId !== null && t.id === revealId} />
+          ))}
+        </div>
       )}
 
       <h3>Who&apos;s betting?</h3>
@@ -1851,20 +1865,10 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
           setOtherName('');
         }}>Use this name</button>
       </label>
-      {familyTickets.length > 0 && (
-        <p className="muted small">
-          Bets from this family: {familyTickets.map((t) => fullName(t.bettor || t.buyer, t.familyId)).join(', ')}
-        </p>
-      )}
-
       {!bettor ? (
         <p className="muted">Pick who&apos;s betting above to draft your picks.</p>
       ) : myTicket || lastTicket ? (
-        <div>
-          <h3>{bettor}&apos;s play</h3>
-          <TicketCard ticket={myTicket || lastTicket} game={game} showPayouts={false} odds={odds} reveal={revealId !== null && (myTicket || lastTicket)?.id === revealId} />
-          <p className="muted small">One play per person per game — tap another name above to buy for someone else in the family.</p>
-        </div>
+        <p className="muted small">{bettor} already has a play — it&apos;s in the list above. One play per person per game — tap another name above to buy for someone else in the family.</p>
       ) : (
         <div>
           <h3>Draft {bettor}&apos;s picks</h3>

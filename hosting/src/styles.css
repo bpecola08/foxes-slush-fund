@@ -16,8 +16,6 @@ button.parent-hero { display: block; width: 100%; font-size: 1.3rem; font-weight
 button.nav-hero { display: block; width: 100%; font-size: 1.15rem; font-weight: 700; padding: 14px; margin: 0 0 12px; }
 .slush-total { font-size: 1.25rem; font-weight: 800; color: #c8102e; margin: 8px 0; text-align: center; }
 .slush-projection { text-align: center; font-size: 0.92rem; font-weight: 500; margin: 2px 0 6px; }
-.qr-block { text-align: center; margin: 14px 0 4px; }
-.qr-block img { border-radius: 8px; background: #ffffff; padding: 4px; }
 .big-pot { text-align: center; font-weight: 800; font-size: 1.05rem; color: #e5484d; margin: 6px 0; }
 .venmo-btn { display: inline-block; background: #008cff; color: #ffffff; font-weight: 700; padding: 10px 16px; border-radius: 8px; text-decoration: none; }
 input, select { padding: 8px 10px; border: 1px solid #cccccc; border-radius: 8px; margin: 4px 6px 4px 0; font-size: 0.95rem; max-width: 100%; }
