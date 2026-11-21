@@ -1106,18 +1106,6 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
             <p className="muted small">If this game was opened before a deck rule changed, tap to rebuild the decks from the starting goalie. Cards already drawn stay drawn.</p>
             <button className="ghost" onClick={rebuildDecks} disabled={busy}>Fix the decks</button>
           </div>
-          <h3>Close the draft</h3>
-          <p className="muted small">Once the real game starts, close the draft so no more plays can be bought. You can still resolve the game after it ends.</p>
-          <button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button>
-        </div>
-      )}
-
-      {game.phase === 'closed' && (
-        <div className="card">
-          <h2>Draft closed — game in progress</h2>
-          <p className="muted">No more plays can be bought. Resolve the game below once it ends, or reopen the draft if you closed it early.</p>
-          <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button>
-          {goalieFixBlock}
         </div>
       )}
 
@@ -1207,7 +1195,19 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
 
       {(game.phase === 'open' || game.phase === 'closed') && (
         <div className="card">
-          <h2>Resolve the game</h2>
+          <h2>Game day</h2>
+          {game.phase === 'open' ? (
+            <div>
+              <p className="muted small">{playCount} play{playCount === 1 ? '' : 's'} in · pots total {money(CATEGORIES.reduce((s, c) => s + (game.pots?.[c.key] || 0), 0))}. Once the real game starts, close the draft so no more plays can be bought — then enter the results right here as the game ends.</p>
+              <p><button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button></p>
+            </div>
+          ) : (
+            <div>
+              <p className="muted small">Draft closed ✓ — no more plays can be bought. Enter the results below once the game ends. Closed it early by mistake? <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button></p>
+              {goalieFixBlock}
+            </div>
+          )}
+          <h3>Results — who did it?</h3>
           {CATEGORIES.map(({ key, label }) => {
             const res = game.resolutions?.[key];
             return (
