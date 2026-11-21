@@ -174,6 +174,25 @@ function TicketCard({ ticket, game, showPayouts, onPayout, odds, reveal }) {
     if (!res) return null;
     return res.winners.find((w) => w.ticketId === ticket.id) || null;
   };
+  // Win-chance line (Brandon, Nov 20, 2026): combine each pick's season win
+  // rate in its category — the same ghost-win math as the pick screens,
+  // (wins + 1) / (games + roster size) — into the chance at least one of
+  // the play's picks hits: 1 minus the chance they all miss. Only counts
+  // categories the play actually has.
+  let shot = null;
+  if (odds) {
+    const parts = [];
+    let miss = 1;
+    for (const { key, label } of CATEGORIES) {
+      const pick = pickPlayer(ticket.picks?.[key]);
+      if (!pick) continue;
+      const w = odds.wins[key].get(pick.number) || 0;
+      const p = (w + 1) / (odds.games + ROSTER.length);
+      parts.push(`${label} ${Math.round(100 * p)}%`);
+      miss *= 1 - p;
+    }
+    if (parts.length > 0) shot = { pct: Math.round(100 * (1 - miss)), parts };
+  }
   return (
     <div className="ticket">
       <div className="ticket-head">
@@ -209,6 +228,11 @@ function TicketCard({ ticket, game, showPayouts, onPayout, odds, reveal }) {
           );
         })}
       </div>
+      {shot && (
+        <p className="muted small">
+          🎲 Your shot: <strong>~{shot.pct}%</strong> to win at least one — {shot.parts.join(' · ')} (based on this season)
+        </p>
+      )}
       {showPayouts && (
         <div className="payouts">
           {CATEGORIES.map(({ key, label }) => {
