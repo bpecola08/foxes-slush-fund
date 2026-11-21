@@ -919,7 +919,7 @@ test('validateImportEntries cleans a dashboard-style game and fills defaults', (
   assert.equal(e.opponent, 'New Jersey Colonials');
   assert.equal(e.startingGoalie, null); // not recorded in the old dashboard
   assert.equal(e.drawMode, 'physical');
-  assert.equal(e.resolutions.firstGoal.playerName, 'Liam'); // roster name for #22
+  assert.equal(e.resolutions.firstGoal.playerName, 'Liam Pecola'); // roster name for #22
   assert.equal(e.resolutions.playmaker.winners[0].familyId, '58'); // stringified
   assert.equal(e.resolutions.playmaker.winners[0].disposition, 'paid'); // default
   assert.equal(e.resolutions.firstPenalty, null);

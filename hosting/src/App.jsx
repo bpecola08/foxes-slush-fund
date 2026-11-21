@@ -4,22 +4,22 @@ import { api, listenGame, listenGameLog, listenWallets, setOrganizerPassword as 
 // Roster — mirrors lib/logic.js (display copy only; all money logic
 // runs server-side in the Vercel API).
 const ROSTER = [
-  { number: 9, name: 'Iannini', family: 'Lauren & Tim' },
-  { number: 16, name: 'Keller', family: 'Diane & Brian' },
-  { number: 17, name: 'Stanczyk', family: 'Kaley & Travis' },
-  { number: 19, name: 'Vrcek', family: 'Cheryl & Mike' },
-  { number: 20, name: 'Heichel', family: 'David & Kayla' },
-  { number: 22, name: 'Liam', family: 'Trish Adair & Brandon Pecola' },
-  { number: 23, name: 'Mohammed', family: 'Sarah Setcavage' },
-  { number: 24, name: 'Masula', family: 'Erin & Michael' },
-  { number: 29, name: 'H. Boyle', family: 'Lauren & Chris Boyle' },
-  { number: 55, name: 'Peters', family: 'Allie & Jeff' },
-  { number: 58, name: 'Beatty', family: 'Kahla & Jeffrey' },
-  { number: 87, name: 'T. Boyle', family: 'Lauren & Chris Boyle' },
-  { number: 88, name: 'Ifft', family: 'Kari & Ben' },
-  { number: 94, name: 'Freshwater', family: 'Katlin & Brent' },
-  { number: 96, name: 'Olszewski', family: 'Jason Gordon' },
-  { number: 98, name: 'Beckett', family: 'Amanda & Brad' },
+  { number: 9, name: 'Nolan Iannini', family: 'Lauren & Tim' },
+  { number: 16, name: 'Nathan Keller', family: 'Diane & Brian' },
+  { number: 17, name: 'Noah Stanczyk', family: 'Kaley & Travis' },
+  { number: 19, name: 'Alex Vrcek', family: 'Cheryl & Mike' },
+  { number: 20, name: 'Carter Heichel', family: 'David & Kayla' },
+  { number: 22, name: 'Liam Pecola', family: 'Trish Adair & Brandon Pecola' },
+  { number: 23, name: 'Christian Mohammed', family: 'Sarah Setcavage' },
+  { number: 24, name: 'Michael Masula', family: 'Erin & Michael' },
+  { number: 29, name: 'Harrison Boyle', family: 'Lauren & Chris Boyle' },
+  { number: 55, name: 'Logan Peters', family: 'Allie & Jeff' },
+  { number: 58, name: 'Blake Beatty', family: 'Kahla & Jeffrey' },
+  { number: 87, name: 'Teddy Boyle', family: 'Lauren & Chris Boyle' },
+  { number: 88, name: 'Luke Ifft', family: 'Kari & Ben' },
+  { number: 94, name: 'Gordon Freshwater', family: 'Katlin & Brent' },
+  { number: 96, name: 'John Felix Olszewski', family: 'Jason Gordon' },
+  { number: 98, name: 'Camden Beckett', family: 'Amanda & Brad' },
 ];
 
 const CATEGORIES = [
@@ -46,19 +46,19 @@ function pickPlayer(pick) {
 // ("Lauren", "Tim") — the family's last name comes from the roster entry for
 // the bettor's family (familyId = the kid's jersey number). A name that
 // already has a last name ("Trish Adair") and the "Grandparents" group are
-// left alone. Family 22 ("Liam") has no last name in the roster — its parents
-// already carry full names, so nothing is appended there.
+// left alone. Family 22 is Liam's — his parents have different last names
+// (Adair / Pecola) and already carry full names, so nothing is appended there.
 function fullName(buyer, familyId) {
   if (!buyer) return buyer;
   if (buyer === 'Grandparents') return buyer;
   if (String(buyer).trim().includes(' ')) return buyer; // already a full name
   const entry = ROSTER.find((p) => String(p.number) === String(familyId));
-  if (!entry || entry.name === 'Liam') return buyer;
-  const last = entry.name.split(' ').pop(); // 'H. Boyle' -> 'Boyle', 'Iannini' -> 'Iannini'
+  if (!entry || String(familyId) === '22') return buyer;
+  const last = entry.name.split(' ').pop(); // 'Harrison Boyle' -> 'Boyle', 'Nolan Iannini' -> 'Iannini'
   return `${buyer} ${last}`;
 }
 
-// The goalies (#29 H. Boyle, #88 Ifft). Who can be picked depends on the
+// The goalies (#29 Harrison Boyle, #88 Luke Ifft). Who can be picked depends on the
 // starting goalie: the goalie in net cannot score (out of First Goal only),
 // Harrison does not skate out so he is out of every category when he is the
 // backup, and Luke plays as a skater when Harrison is in net so he is in
@@ -719,8 +719,8 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     <div>
       <h3>Starting goalie</h3>
       <p className="muted small">Opened with the wrong goalie? Change him here — the decks rebuild around the new goalie. Plays already sold stay as they are.</p>
-      <label><input type="radio" name="goalie-fix" checked={goalieSel === 29} onChange={() => { setGoaliePick(29); setGoalieArm(false); }} /> #29 H. Boyle</label>
-      <label><input type="radio" name="goalie-fix" checked={goalieSel === 88} onChange={() => { setGoaliePick(88); setGoalieArm(false); }} /> #88 Ifft</label>
+      <label><input type="radio" name="goalie-fix" checked={goalieSel === 29} onChange={() => { setGoaliePick(29); setGoalieArm(false); }} /> #29 Harrison Boyle</label>
+      <label><input type="radio" name="goalie-fix" checked={goalieSel === 88} onChange={() => { setGoaliePick(88); setGoalieArm(false); }} /> #88 Luke Ifft</label>
       <p>
         <button className="ghost" onClick={changeGoalie} disabled={busy || goalieSel === game.startingGoalie}>
           {goalieArm ? 'Tap again to confirm' : 'Change goalie & rebuild decks'}
@@ -1037,8 +1037,8 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
 
           <h3>Step 2 — Starting goalie</h3>
-          <label><input type="radio" name="goalie" checked={goalie === 29} onChange={() => setGoalie(29)} /> #29 H. Boyle</label>
-          <label><input type="radio" name="goalie" checked={goalie === 88} onChange={() => setGoalie(88)} /> #88 Ifft</label>
+          <label><input type="radio" name="goalie" checked={goalie === 29} onChange={() => setGoalie(29)} /> #29 Harrison Boyle</label>
+          <label><input type="radio" name="goalie" checked={goalie === 88} onChange={() => setGoalie(88)} /> #88 Luke Ifft</label>
 
           <h3>Step 3 — Rollover</h3>
           <p className="muted small">These are the pots rolling over from the last game — they fill in automatically. Edit them here if the real amount is different.</p>
