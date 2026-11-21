@@ -528,12 +528,21 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   // Start a New Game form
   const [gameDate, setGameDate] = useState(todayStr());
   const [opponent, setOpponent] = useState('');
-  const [goalie, setGoalie] = useState(88);
+  // No default starting goalie: a silent #88 default opened the Nov 21,
+  // 2026 game with Luke in net while Harrison was starting, and a First
+  // Goal pick of Luke got blocked. The organizer must pick one.
+  const [goalie, setGoalie] = useState(null);
   // Change-goalie fix for an open game: which goalie the organizer has
   // picked in the fix card (null = follow the game's current goalie), and
   // the tap-again arm for its save button.
   const [goaliePick, setGoaliePick] = useState(null);
   const [goalieArm, setGoalieArm] = useState(false);
+  // Fix-a-play (move a pick): which play it leaves, which play it joins,
+  // which category, and the tap-again arm for its move button.
+  const [fixFrom, setFixFrom] = useState('');
+  const [fixTo, setFixTo] = useState('');
+  const [fixCat, setFixCat] = useState('');
+  const [fixArm, setFixArm] = useState(false);
   const [voidArm, setVoidArm] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
   const [potInputs, setPotInputs] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
@@ -674,6 +683,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   };
 
   const startGame = async () => {
+    if (!goalie) return fail(new Error('Pick the starting goalie first (Step 2) — the decks are built around him.'));
     await run(async () => {
       await api.openGame(gameDate || null, opponent.trim() || null, goalie);
       flash(`Game started — Foxes vs ${opponent || 'TBD'}. The draft is open.`);
@@ -758,6 +768,69 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           {goalieArm ? 'Tap again to confirm' : 'Change goalie & rebuild decks'}
         </button>{' '}
         <span className="muted small">Now: #{game.startingGoalie} in net.</span>
+      </p>
+    </div>
+  ) : null;
+
+  // Shared by the open and closed cards: move one category's pick from
+  // one play to another — the fix when a pick was entered under the
+  // wrong person. If the play it leaves has no picks left, it is removed.
+  const fixTickets = game?.tickets || [];
+  const fixFromT = fixTickets.find((t) => t.id === fixFrom) || null;
+  const fixToT = fixTickets.find((t) => t.id === fixTo) || null;
+  const fixCats = fixFromT && fixToT
+    ? CATEGORIES.filter(({ key }) => fixFromT.picks?.[key] && !fixToT.picks?.[key] && !game.resolutions?.[key])
+    : [];
+  const fixCatObj = fixCats.find((c) => c.key === fixCat) || fixCats[0] || null;
+  const movePick = async () => {
+    if (!fixFromT || !fixToT || !fixCatObj) return;
+    const pick = fixFromT.picks[fixCatObj.key];
+    if (!fixArm) {
+      setFixArm(true);
+      flash(`Check, then tap again to confirm: ${pick.name} (#${pick.number}) — ${fixCatObj.label} — moves from ${fixFromT.bettor || fixFromT.buyer} to ${fixToT.bettor || fixToT.buyer}.`);
+      return;
+    }
+    await run(async () => {
+      const out = await api.transferPick(fixFromT.id, fixToT.id, fixCatObj.key);
+      setFixArm(false);
+      setFixFrom('');
+      setFixTo('');
+      setFixCat('');
+      flash(`Moved: ${out.player.name} (#${out.player.number}) — ${fixCatObj.label} — now belongs to ${out.toBettor}${out.removedPlay ? `; ${out.fromBettor}'s play had nothing left and was removed` : ''}.`);
+    });
+  };
+  const fixPlayBlock = game && (game.phase === 'open' || game.phase === 'closed') && fixTickets.length >= 2 ? (
+    <div>
+      <h3>Fix a play — move a pick</h3>
+      <p className="muted small">A pick entered under the wrong person? Move it to the right play here. The $2 follows the pick, and a play left with no picks is removed.</p>
+      <label>From play
+        <select value={fixFrom} onChange={(e) => { setFixFrom(e.target.value); setFixArm(false); }}>
+          <option value="">Pick a play…</option>
+          {fixTickets.map((t) => (
+            <option key={t.id} value={t.id}>{t.bettor || t.buyer} ({t.familyLabel || t.family})</option>
+          ))}
+        </select>
+      </label>
+      <label>To play
+        <select value={fixTo} onChange={(e) => { setFixTo(e.target.value); setFixArm(false); }}>
+          <option value="">Pick a play…</option>
+          {fixTickets.filter((t) => t.id !== fixFrom).map((t) => (
+            <option key={t.id} value={t.id}>{t.bettor || t.buyer} ({t.familyLabel || t.family})</option>
+          ))}
+        </select>
+      </label>
+      <label>Category
+        <select value={fixCatObj?.key || ''} onChange={(e) => { setFixCat(e.target.value); setFixArm(false); }} disabled={fixCats.length === 0}>
+          {fixCats.length === 0 && <option value="">No movable category</option>}
+          {fixCats.map((c) => (
+            <option key={c.key} value={c.key}>{c.label} — {fixFromT?.picks?.[c.key]?.name}</option>
+          ))}
+        </select>
+      </label>
+      <p>
+        <button className="ghost" onClick={movePick} disabled={busy || !fixCatObj}>
+          {fixArm ? 'Tap again to confirm the move' : 'Move pick'}
+        </button>
       </p>
     </div>
   ) : null;
@@ -1074,6 +1147,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <h3>Step 2 — Starting goalie</h3>
           <label><input type="radio" name="goalie" checked={goalie === 29} onChange={() => setGoalie(29)} /> #29 Harrison Boyle</label>
           <label><input type="radio" name="goalie" checked={goalie === 88} onChange={() => setGoalie(88)} /> #88 Luke Ifft</label>
+          {!goalie && <p className="muted small">Pick one — the decks are built around him, and the game can't open until you do.</p>}
 
           <h3>Step 3 — Rollover</h3>
           <p className="muted small">These are the pots rolling over from the last game — they fill in automatically. Edit them here if the real amount is different.</p>
@@ -1085,7 +1159,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           ))}
 
           <h3>Step 4 — Open the draft</h3>
-          <button className="primary" onClick={startGame} disabled={busy}>Start Game — Lock Roster &amp; Open Draft</button>
+          <button className="primary" onClick={startGame} disabled={busy || !goalie}>Start Game — Lock Roster &amp; Open Draft</button>
         </div>
       )}
 
@@ -1096,6 +1170,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <label>Opponent <input type="text" value={opponent} onChange={(e) => setOpponent(e.target.value)} /></label>
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
           {goalieFixBlock}
+          {fixPlayBlock}
           <div>
             <h3>Enter a play for a parent</h3>
             <p className="muted small">A parent handed you their picks, or texted them? Enter the play for them right here — no logging into the Parent Portal as their family.</p>
@@ -1205,6 +1280,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
             <div>
               <p className="muted small">Draft closed ✓ — no more plays can be bought. Enter the results below once the game ends. Closed it early by mistake? <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button></p>
               {goalieFixBlock}
+              {fixPlayBlock}
             </div>
           )}
           <h3>Results — who did it?</h3>

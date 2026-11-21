@@ -7,7 +7,7 @@ const logic = require('../lib/logic');
 const { hashPassword, verifyPassword } = require('../lib/auth');
 
 const { createInitialState, deposit, buyTicket, resolveCategory, rollCategory, unrollCategory, setPayout,
-  resetGame, voidGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setStartingGoalie, setCarryover, setGameInfo, payAmanda, setDrawMode, setGamesLeft, setScratched, buildBackup, applyBackup, validateImportEntries, correctSlush, logFixDelta, setWalletBalances } = logic;
+  resetGame, voidGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setStartingGoalie, transferPick, setCarryover, setGameInfo, payAmanda, setDrawMode, setGamesLeft, setScratched, buildBackup, applyBackup, validateImportEntries, correctSlush, logFixDelta, setWalletBalances } = logic;
 
 // Deterministic RNG (LCG) so shuffles are reproducible in tests.
 function seededRng(seed = 42) {
@@ -322,6 +322,53 @@ test('setStartingGoalie: an open game opened with the wrong goalie can be fixed 
   const fresh = createInitialState();
   assert.throws(() => setStartingGoalie(fresh, 29), /No game is open/);
   assert.throws(() => setStartingGoalie(state, 22), /#29 or #88/);
+});
+
+test('transferPick moves a pick to another play; a play left empty is removed; pots, slush and decks do not move', () => {
+  const state = createInitialState();
+  deposit(state, '58', 2000); // Beatty family wallet: $20
+  openGame(state, { gameDate: '2026-11-21', opponent: 'Allegheny Badgers', startingGoalie: 29, rng: seededRng(9) });
+  // Kahla drew Luke (#88) for First Goal only — $2.
+  const kahla = buyTicket(state, { familyId: '58', buyer: 'Kahla', bettor: 'Kahla', mode: 'physical', picks: { firstGoal: 88, firstPenalty: null, playmaker: null } });
+  // Jeffrey has First Penalty + Playmaker, no First Goal — $4.
+  const jeff = buyTicket(state, { familyId: '58', buyer: 'Jeffrey', bettor: 'Jeffrey', mode: 'physical', picks: { firstGoal: null, firstPenalty: 98, playmaker: 20 } });
+  assert.equal(state.wallets['58'].balanceCents, 1400);
+  const decksBefore = JSON.parse(JSON.stringify(state.game.decks));
+
+  const out = transferPick(state, { fromTicketId: kahla.id, toTicketId: jeff.id, category: 'firstGoal' });
+  assert.equal(out.player.number, 88);
+  assert.equal(out.removedPlay, true);
+  assert.equal(state.tickets.length, 1);
+  assert.equal(state.tickets[0].id, jeff.id);
+  assert.equal(state.tickets[0].picks.firstGoal.number, 88);
+  assert.equal(state.tickets[0].paidCents, 600);
+  // Same family: the $2 refund and the $2 charge cancel — wallet unmoved.
+  assert.equal(state.wallets['58'].balanceCents, 1400);
+  // The category stayed sold exactly once: pots, slush, decks unchanged.
+  assert.deepEqual(state.game.pots, { firstGoal: 100, firstPenalty: 100, playmaker: 100 });
+  assert.equal(state.slushCents, 300);
+  assert.deepEqual(state.game.decks, decksBefore);
+});
+
+test('transferPick across families moves the $2 between wallets; bad moves throw', () => {
+  const state = createInitialState();
+  deposit(state, '58', 2000);
+  deposit(state, '22', 2000);
+  openGame(state, { gameDate: '2026-11-21', opponent: 'Allegheny Badgers', startingGoalie: 29, rng: seededRng(4) });
+  const a = buyTicket(state, { familyId: '58', buyer: 'Kahla', bettor: 'Kahla', mode: 'physical', picks: { firstGoal: 88, firstPenalty: 16, playmaker: null } });
+  const b = buyTicket(state, { familyId: '22', buyer: 'Trish', bettor: 'Trish', mode: 'physical', picks: { firstGoal: null, firstPenalty: 17, playmaker: 24 } });
+  // Target already holding the category throws.
+  assert.throws(() => transferPick(state, { fromTicketId: a.id, toTicketId: b.id, category: 'firstPenalty' }), /already has/);
+  // Source without the category throws.
+  assert.throws(() => transferPick(state, { fromTicketId: b.id, toTicketId: a.id, category: 'firstGoal' }), /has no First Goal pick/);
+  const out = transferPick(state, { fromTicketId: a.id, toTicketId: b.id, category: 'firstGoal' });
+  assert.equal(out.removedPlay, false); // Kahla keeps her First Penalty pick
+  assert.equal(state.wallets['58'].balanceCents, 2000 - 400 + 200);
+  assert.equal(state.wallets['22'].balanceCents, 2000 - 400 - 200);
+  // A resolved category's picks can no longer move.
+  resolveCategory(state, 'firstGoal', 88);
+  const c = buyTicket(state, { familyId: '22', buyer: 'Brandon', bettor: 'Brandon', mode: 'physical', picks: { firstGoal: null, firstPenalty: 19, playmaker: null } });
+  assert.throws(() => transferPick(state, { fromTicketId: b.id, toTicketId: c.id, category: 'firstGoal' }), /already resolved/);
 });
 
 test('Play now pay later: a ticket goes through on a short wallet and the balance goes negative; the ticket is marked payLater', () => {

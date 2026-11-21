@@ -11,6 +11,7 @@
 //   reopenDraft:  {} -> { game }   (undo a close)
 //   rebuildDecks: {} -> { firstGoal: {before, after}, firstPenalty: {...}, playmaker: {...} }   (one-time fix: rebuild the open game's decks from the starting goalie, keeping drawn cards out)
 //   setStartingGoalie: { startingGoalie } -> { startingGoalie, decks, conflicts }   (fix a wrong goalie pick on an open game; decks rebuild, sold plays stay)
+//   transferPick: { fromTicketId, toTicketId, category } -> { category, player, fromBettor, toBettor, removedPlay }   (move one category's pick to another play — entered under the wrong person; a source play left empty is removed)
 //   resetGame:    {} -> { logged }   (saves the finished game to the Game Log, then clears back to setup; merged in from the old resetGame function)
 //   payAmanda:    {} -> { paidCents, paidAt }   (records the slush as sent to Amanda and zeroes the amount owed; merged in from the old payAmanda function)
 //   factoryReset: {} -> {}   (wipes plays, pots, wallets, slush and the Game Log; the organizer password survives; merged in from the old factoryReset function)
@@ -95,6 +96,17 @@ module.exports = handler(async (body) => {
   if (action === 'setStartingGoalie') {
     const out = await db.withState((state) => {
       const r = logic.setStartingGoalie(state, body.startingGoalie);
+      return { result: r };
+    });
+    return { ...out };
+  }
+  if (action === 'transferPick') {
+    const out = await db.withState((state) => {
+      const r = logic.transferPick(state, {
+        fromTicketId: body.fromTicketId,
+        toTicketId: body.toTicketId,
+        category: body.category,
+      });
       return { result: r };
     });
     return { ...out };

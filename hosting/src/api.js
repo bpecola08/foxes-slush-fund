@@ -70,6 +70,8 @@ export const api = {
   rebuildDecks: () => post('game', withPassword({ action: 'rebuildDecks' })),
   setStartingGoalie: (startingGoalie) =>
     post('game', withPassword({ action: 'setStartingGoalie', startingGoalie })),
+  transferPick: (fromTicketId, toTicketId, category) =>
+    post('game', withPassword({ action: 'transferPick', fromTicketId, toTicketId, category })),
   resolveCategory: (category, playerNumber) =>
     post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
   rollCategory: (category) =>
