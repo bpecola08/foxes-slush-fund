@@ -103,6 +103,26 @@ function playerOdds(log) {
   return { games: entries.length, wins };
 }
 const oddsPct = (wins, games) => Math.round((100 * ((wins || 0) + 1)) / (games + ROSTER.length));
+// Combined win chance for a set of picks (Brandon, Nov 20, 2026): picks
+// maps category key -> player number (or null). Each category uses the
+// same ghost-win rate as oddsPct; the combined chance that at least one
+// pick hits is 1 minus the chance they all miss. Returns { pct, parts }
+// or null when nothing is picked.
+function winShot(picks, odds) {
+  if (!odds) return null;
+  const parts = [];
+  let miss = 1;
+  for (const { key, label } of CATEGORIES) {
+    const num = picks ? picks[key] : null;
+    if (num == null) continue;
+    const w = odds.wins[key].get(num) || 0;
+    const p = (w + 1) / (odds.games + ROSTER.length);
+    parts.push(`${label} ${Math.round(100 * p)}%`);
+    miss *= 1 - p;
+  }
+  if (parts.length === 0) return null;
+  return { pct: Math.round(100 * (1 - miss)), parts };
+}
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) =>
   d ? new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -174,24 +194,16 @@ function TicketCard({ ticket, game, showPayouts, onPayout, odds, reveal }) {
     if (!res) return null;
     return res.winners.find((w) => w.ticketId === ticket.id) || null;
   };
-  // Win-chance line (Brandon, Nov 20, 2026): combine each pick's season win
-  // rate in its category — the same ghost-win math as the pick screens,
-  // (wins + 1) / (games + roster size) — into the chance at least one of
-  // the play's picks hits: 1 minus the chance they all miss. Only counts
-  // categories the play actually has.
+  // Win-chance line (Brandon, Nov 20, 2026): the play's combined chance to
+  // win at least one category, from each pick's season win rate.
   let shot = null;
   if (odds) {
-    const parts = [];
-    let miss = 1;
-    for (const { key, label } of CATEGORIES) {
+    const nums = {};
+    for (const { key } of CATEGORIES) {
       const pick = pickPlayer(ticket.picks?.[key]);
-      if (!pick) continue;
-      const w = odds.wins[key].get(pick.number) || 0;
-      const p = (w + 1) / (odds.games + ROSTER.length);
-      parts.push(`${label} ${Math.round(100 * p)}%`);
-      miss *= 1 - p;
+      nums[key] = pick ? pick.number : null;
     }
-    if (parts.length > 0) shot = { pct: Math.round(100 * (1 - miss)), parts };
+    shot = winShot(nums, odds);
   }
   return (
     <div className="ticket">
@@ -1430,6 +1442,11 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
   const myTicket = bettor ? familyTickets.find((t) => (t.bettor || t.buyer) === bettor) : null;
   const selectedCount = CATEGORIES.filter((c) => selected[c.key] !== null).length;
   const price = selectedCount * 2;
+  // Live win-chance for the picks being entered, shown next to the pay
+  // buttons so Brandon can read it to the parent. Physical mode only —
+  // in virtual mode the selections are face-down deck positions and the
+  // player isn't known until the draw.
+  const liveShot = effectiveMode === 'physical' ? winShot(selected, odds) : null;
 
   const pickFamily = (w) => {
     setWallet(w);
@@ -1622,6 +1639,11 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
               </div>
             );
           })}
+          {liveShot && (
+            <p className="muted small">
+              🎲 {bettor}&apos;s shot: <strong>~{liveShot.pct}%</strong> to win at least one — {liveShot.parts.join(' · ')} (based on this season)
+            </p>
+          )}
           {wallet.balanceCents < price * 100 ? (
             <p>
               <button className="primary" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
@@ -1796,6 +1818,10 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
 
   const selectedCount = CATEGORIES.filter((c) => selected[c.key] !== null).length;
   const price = selectedCount * 2;
+  // Live win-chance for the picks being entered, shown next to the buy
+  // button. Physical mode only — virtual selections are face-down deck
+  // positions, so no player is known until the draw.
+  const liveShot = effectiveMode === 'physical' ? winShot(selected, odds) : null;
 
   return (
     <div className="card">
@@ -1916,6 +1942,11 @@ function ParentPortal({ game, wallets, log, flash, fail }) {
               </div>
             );
           })}
+          {liveShot && (
+            <p className="muted small">
+              🎲 Your shot: <strong>~{liveShot.pct}%</strong> to win at least one — {liveShot.parts.join(' · ')} (based on this season)
+            </p>
+          )}
           {wallet.balanceCents < price * 100 ? (
             <p>
               <button className="primary" onClick={() => buy(true)} disabled={busy || selectedCount === 0}>
