@@ -341,6 +341,43 @@ test('Play now pay later: a ticket goes through on a short wallet and the balanc
   assert.equal(state.wallets['22'].balanceCents, 400);
 });
 
+test('Paid cash: a ticket goes through on an empty wallet, the wallet is not charged, and the ticket is marked paidCash', () => {
+  const state = createInitialState();
+  openGame(state, { gameDate: '2026-11-21', opponent: 'Allegheny', startingGoalie: 88, rng: seededRng(7) });
+  // Wallet holds $0 — a normal buy is rejected.
+  assert.throws(
+    () => buyTicket(state, { familyId: '17', buyer: 'Travis Stanczyk', picks: { firstGoal: 0, firstPenalty: 0, playmaker: 0 }, mode: 'virtual' }),
+    /Insufficient wallet balance/
+  );
+  // Paid cash goes through and leaves the wallet untouched.
+  const ticket = buyTicket(state, { familyId: '17', buyer: 'Travis Stanczyk', picks: { firstGoal: 0, firstPenalty: 0, playmaker: 0 }, mode: 'virtual', paidCash: true });
+  assert.equal(ticket.paidCash, true);
+  assert.equal(ticket.payLater, false);
+  assert.equal(ticket.paidCents, 600);
+  assert.equal(state.wallets['17'].balanceCents, 0);
+  // Pots and slush still get their shares — the cash is in the organizer's hand.
+  assert.equal(state.game.pots.firstGoal, 100);
+  assert.equal(state.game.pots.firstPenalty, 100);
+  assert.equal(state.game.pots.playmaker, 100);
+  assert.equal(state.slushCents, 300);
+});
+
+test('voidGame does not credit the wallet for a cash play (cash is handed back in person) but still backs the slush out', () => {
+  const state = createInitialState();
+  deposit(state, '22', 2000);
+  openGame(state, { gameDate: '2026-11-21', opponent: 'Allegheny', startingGoalie: 88, rng: seededRng() });
+  buyFullTicket(state, '22', 'Trish'); // $6 from the wallet
+  buyTicket(state, { familyId: '17', buyer: 'Travis', picks: { firstGoal: 0, firstPenalty: null, playmaker: null }, mode: 'virtual', paidCash: true }); // $2 cash
+  assert.equal(state.wallets['22'].balanceCents, 1400);
+  assert.equal(state.wallets['17'].balanceCents, 0);
+  assert.equal(state.slushCents, 400);
+  const r = voidGame(state);
+  assert.equal(r.refundedCents, 800);
+  assert.equal(state.wallets['22'].balanceCents, 2000); // wallet play refunded
+  assert.equal(state.wallets['17'].balanceCents, 0); // cash play NOT credited
+  assert.equal(state.slushCents, 0);
+});
+
 test('setCarryover works in setup and is rejected once the game is open', () => {
   const state = createInitialState();
   setCarryover(state, 'playmaker', 700);

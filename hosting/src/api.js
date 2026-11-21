@@ -49,7 +49,10 @@ export const api = {
   initApp: () => post('initApp', withPassword()),
   deposit: (familyId, amountCents) =>
     post('deposit', withPassword({ familyId, amountCents })),
-  buyTicket: (familyId, bettor, picks, mode, payLater) => post('buyTicket', { familyId, bettor, picks, mode, payLater }),
+  buyTicket: (familyId, bettor, picks, mode, payLater, paidCash) =>
+    paidCash
+      ? post('buyTicket', withPassword({ familyId, bettor, picks, mode, payLater, paidCash }))
+      : post('buyTicket', { familyId, bettor, picks, mode, payLater }),
   setGameInfo: (gameDate, opponent) =>
     post('game', withPassword({ action: 'setInfo', gameDate, opponent })),
   setCarryover: (category, amountCents) =>

@@ -181,6 +181,7 @@ function TicketCard({ ticket, game, showPayouts, onPayout, odds, reveal }) {
         <span className="muted">{ticket.familyLabel}</span>
         <span className="muted small">{ticket.mode === 'physical' ? '🪙 real chip' : '🎲 virtual'}</span>
         {ticket.payLater && <span className="badge warn">Play now pay later</span>}
+        {ticket.paidCash && <span className="badge paid">💵 Paid cash</span>}
         <span className="price">Play {money(ticket.paidCents)}</span>
       </div>
       <div className="picks">
@@ -1429,7 +1430,7 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
     setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
   };
 
-  const buy = async (payLater = false) => {
+  const buy = async (payLater = false, paidCash = false) => {
     if (!bettor) return fail(new Error('Pick who is betting first.'));
     const picks = { ...selected };
     const count = CATEGORIES.filter((c) => picks[c.key] !== null).length;
@@ -1440,7 +1441,7 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
     }
     setBusy(true);
     try {
-      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, effectiveMode, payLater)).data;
+      const { ticket } = (await api.buyTicket(wallet.familyId, bettor, picks, effectiveMode, payLater, paidCash)).data;
       setLastTicket(ticket);
       if (effectiveMode === 'virtual') {
         setRevealId(ticket.id);
@@ -1449,9 +1450,11 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
         setRevealId(null);
       }
       setSelected({ firstGoal: null, firstPenalty: null, playmaker: null });
-      flash(payLater
-        ? `Play entered for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} on Play now pay later.`
-        : `Play entered for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}.`);
+      flash(paidCash
+        ? `Play entered for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} paid in cash.`
+        : payLater
+          ? `Play entered for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)} on Play now pay later.`
+          : `Play entered for ${bettor} — $${(ticket.paidCents / 100).toFixed(2)}.`);
     } catch (e) {
       fail(e);
     } finally {
@@ -1609,6 +1612,12 @@ function OrganizerEntry({ game, wallets, log, flash, fail, onBack }) {
               </button>
             </p>
           )}
+          <p>
+            <button onClick={() => buy(false, true)} disabled={busy || selectedCount === 0}>
+              💵 Paid cash — ${price}.00
+            </button>
+            <span className="muted small"> They handed you cash — the play is saved and their wallet isn&apos;t charged.</span>
+          </p>
         </div>
       )}
       <button className="ghost" onClick={() => { setWallet(null); setBettor(''); setOtherName(''); }}>Switch family</button>
