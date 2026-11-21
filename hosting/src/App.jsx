@@ -735,13 +735,13 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const voidTap = async () => {
     if (!voidArm) {
       setVoidArm(true);
-      flash('Check, then tap the reset button again to confirm: every play in this game is refunded to the family wallets and all picks are cleared.');
+      flash('Check, then tap the discard button again to confirm: every play in this game is refunded to the family wallets and all picks are cleared.');
       return;
     }
     setVoidArm(false);
     await run(async () => {
       const r = (await api.voidGame()).data;
-      flash(`Game reset — ${r.plays} play(s) refunded, $${(r.refundedCents / 100).toFixed(2)} back into the family wallets. Nothing was saved to the Game Log.`);
+      flash(`Game discarded — ${r.plays} play(s) refunded, $${(r.refundedCents / 100).toFixed(2)} back into the family wallets. Nothing was saved to the Game Log.`);
     });
   };
 
@@ -762,14 +762,17 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
     </div>
   ) : null;
 
-  // Shared by the open and closed cards: the reset-this-game block.
+  // Rendered once at the very bottom of the Organizer Page (Brandon,
+  // Nov 21, 2026): discarding a game is deliberately far away from the
+  // "End game — save to log" button in the resolve card, so the two can
+  // never be confused. Discarding refunds every play and logs nothing.
   const playCount = (game?.tickets || []).length;
   const voidBlock = game && playCount > 0 ? (
     <div>
-      <h3>Reset this game</h3>
-      <p className="muted small">Wrong game, or called off? Every play is refunded back into the family wallets, this game&apos;s slush comes back out, and all picks are cleared. The rolled-over pots stay for the next game, and nothing is saved to the Game Log. Only works before any winner is picked.</p>
+      <h3>Discard this game</h3>
+      <p className="muted small">Wrong game, a test, or called off? Every play is refunded back into the family wallets, this game&apos;s slush comes back out, and all picks are cleared. The rolled-over pots stay for the next game, and nothing is saved to the Game Log. Only works before any winner is picked.</p>
       <button className="danger" onClick={voidTap} disabled={busy}>
-        {voidArm ? 'Tap again to confirm the reset' : `Reset game — refund ${playCount} play${playCount === 1 ? '' : 's'}`}
+        {voidArm ? 'Tap again to confirm the discard' : `Discard game — refund all ${playCount} play${playCount === 1 ? '' : 's'}`}
       </button>
     </div>
   ) : null;
@@ -1106,7 +1109,6 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <h3>Close the draft</h3>
           <p className="muted small">Once the real game starts, close the draft so no more plays can be bought. You can still resolve the game after it ends.</p>
           <button className="primary" onClick={closeDraft} disabled={busy}>Close the draft — game is starting</button>
-          {voidBlock}
         </div>
       )}
 
@@ -1116,7 +1118,6 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <p className="muted">No more plays can be bought. Resolve the game below once it ends, or reopen the draft if you closed it early.</p>
           <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button>
           {goalieFixBlock}
-          {voidBlock}
         </div>
       )}
 
@@ -1272,13 +1273,18 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
               {totalOwedCents === 0 && <p className="muted small">Everyone is settled — nothing left to hand out.</p>}
             </div>
           )}
+          {allWinners.length === 0 && !CATEGORIES.some((c) => game.resolutions?.[c.key]) && (game.tickets || []).length > 0 && (
+            <p className="muted">Resolve a category above and the winners appear here — who to pay, how much, and the Paid / Roll over buttons.</p>
+          )}
           {(game.tickets || []).length === 0 && <p className="muted">No plays yet.</p>}
 
           <h3>End the game</h3>
-          {unmarkedWinners.length > 0 && (
-            <p className="warn">⚠️ {unmarkedWinners.length} winner(s) still “Not paid yet”. Mark them paid or rolled before resetting, or they’ll be logged as unpaid.</p>
+          {CATEGORIES.every((c) => game.resolutions?.[c.key]) && unmarkedWinners.length === 0 ? (
+            <p className="muted">✅ All settled — every category resolved and every winner marked. Ready to end the game.</p>
+          ) : (
+            <p className="warn">⏳ {CATEGORIES.filter((c) => game.resolutions?.[c.key]).length} of {CATEGORIES.length} categories resolved{unmarkedWinners.length > 0 ? ` · ${unmarkedWinners.length} winner(s) still “Not paid yet” — mark them paid or rolled before ending, or they’ll be logged as unpaid` : ''}.</p>
           )}
-          <button className="primary" onClick={reset} disabled={busy}>Reset Game — save to log &amp; start fresh</button>
+          <button className="primary" onClick={reset} disabled={busy}>End game — save to log &amp; start fresh</button>
         </div>
       )}
 
@@ -1372,6 +1378,12 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           }}
         />
       </div>
+
+      {voidBlock && (
+        <div className="card">
+          {voidBlock}
+        </div>
+      )}
 
       <div className="card danger-zone">
         <h2>Factory reset</h2>
