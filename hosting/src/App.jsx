@@ -2402,8 +2402,10 @@ function SeasonStandings({ game, log }) {
   }
   const gamesCount = sources.length;
 
+  // Totals are kept per FAMILY (Brandon, Nov 22, 2026: "merge the
+  // families") — everyone betting under one family wallet counts
+  // together, instead of a separate standings row per person.
   const fam = new Map(); // familyId -> totals
-  const people = new Map(); // familyId|buyer -> totals
   const ensureFam = (familyId, familyLabel) => {
     const key = String(familyId);
     if (!fam.has(key)) {
@@ -2413,13 +2415,6 @@ function SeasonStandings({ game, log }) {
     if (familyLabel && !f.familyLabel) f.familyLabel = familyLabel;
     return f;
   };
-  const ensurePerson = (familyId, buyer, familyLabel) => {
-    const key = `${familyId}|${buyer}`;
-    if (!people.has(key)) {
-      people.set(key, { key, familyId: String(familyId), buyer, familyLabel: familyLabel || '', plays: 0, spentCents: 0, wonCents: 0, wins: 0 });
-    }
-    return people.get(key);
-  };
 
   for (const src of sources) {
     const byTicket = new Map((src.tickets || []).map((t) => [t.id, t]));
@@ -2427,9 +2422,6 @@ function SeasonStandings({ game, log }) {
       const f = ensureFam(t.familyId, t.familyLabel || t.family);
       f.plays += 1;
       f.spentCents += t.paidCents || 0;
-      const p = ensurePerson(t.familyId, t.bettor || t.buyer, t.familyLabel || t.family);
-      p.plays += 1;
-      p.spentCents += t.paidCents || 0;
     }
     for (const { key } of CATEGORIES) {
       const res = src.resolutions ? src.resolutions[key] : null;
@@ -2439,16 +2431,13 @@ function SeasonStandings({ game, log }) {
         const f = ensureFam(w.familyId, t?.familyLabel || w.family);
         f.wonCents += w.payoutCents || 0;
         f.wins += 1;
-        const p = ensurePerson(w.familyId, w.buyer, t?.familyLabel || w.family);
-        p.wonCents += w.payoutCents || 0;
-        p.wins += 1;
       }
     }
   }
 
-  const topPeople = [...people.values()]
-    .filter((p) => p.wins > 0)
-    .sort((a, b) => b.wonCents - a.wonCents || b.wins - a.wins || a.buyer.localeCompare(b.buyer));
+  const topFamilies = [...fam.values()]
+    .filter((f) => f.wins > 0)
+    .sort((a, b) => b.wonCents - a.wonCents || b.wins - a.wins || a.familyLabel.localeCompare(b.familyLabel));
 
   // Which PLAYERS won each category (the kid who scored / took the penalty /
   // made the play), counted across every logged game — including games where
@@ -2475,14 +2464,14 @@ function SeasonStandings({ game, log }) {
       </p>
 
       <div className="standings-panel">
-        <h3>Top winners — by person</h3>
-        {topPeople.length === 0 ? (
+        <h3>Top winners — by family</h3>
+        {topFamilies.length === 0 ? (
           <p className="muted">No winners yet.</p>
         ) : (
-          topPeople.map((p, i) => (
-            <div key={p.key} className="pick-row">
-              <span>{i + 1}. <strong>{fullName(p.buyer, p.familyId)}</strong> <span className="muted">({p.familyLabel})</span></span>
-              <span>{p.wins} win{p.wins === 1 ? '' : 's'} · <strong>{money(p.wonCents)}</strong></span>
+          topFamilies.map((f, i) => (
+            <div key={f.familyId} className="pick-row">
+              <span>{i + 1}. <strong>{f.familyLabel}</strong></span>
+              <span>{f.wins} win{f.wins === 1 ? '' : 's'} · <strong>{money(f.wonCents)}</strong></span>
             </div>
           ))
         )}
