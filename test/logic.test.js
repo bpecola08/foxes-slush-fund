@@ -376,10 +376,17 @@ test('renameBettor puts a clear name on a play; picks, pots and wallets do not m
   openGame(state, { gameDate: '2026-11-22', opponent: 'Armstrong', startingGoalie: 88, rng: seededRng(3) });
   const gp = buyTicket(state, { familyId: '88', buyer: 'Grandparents', bettor: 'Grandparents', mode: 'physical', paidCash: true, picks: { firstGoal: null, firstPenalty: 94, playmaker: null } });
   const potsBefore = JSON.parse(JSON.stringify(state.game.pots));
+  // Resolve First Penalty BEFORE the rename: the resolution snapshots
+  // the winner's name, and the rename must update that snapshot too —
+  // the "who to pay" list reads it.
+  resolveCategory(state, 'firstPenalty', 94);
+  assert.equal(state.game.resolutions.firstPenalty.winners[0].buyer, 'Grandparents');
 
   const out = renameBettor(state, { ticketId: gp.id, name: '  Ifft   Grandparents ' });
   assert.equal(out.oldName, 'Grandparents');
   assert.equal(out.newName, 'Ifft Grandparents'); // trimmed, single-spaced
+  assert.equal(out.winnersUpdated, 1);
+  assert.equal(state.game.resolutions.firstPenalty.winners[0].buyer, 'Ifft Grandparents');
   const t = state.tickets.find((x) => x.id === gp.id);
   assert.equal(t.bettor, 'Ifft Grandparents');
   assert.equal(t.buyer, 'Ifft Grandparents');

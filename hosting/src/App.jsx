@@ -795,7 +795,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       return;
     }
     await run(async () => {
-      const out = await api.transferPick(fixFromT.id, fixToT.id, fixCatObj.key);
+      const out = (await api.transferPick(fixFromT.id, fixToT.id, fixCatObj.key)).data;
       setFixArm(false);
       setFixFrom('');
       setFixTo('');
@@ -851,7 +851,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       return;
     }
     await run(async () => {
-      const out = await api.renameBettor(renameT.id, renameName.trim());
+      const out = (await api.renameBettor(renameT.id, renameName.trim())).data;
       setRenameArm(false);
       setRenameTicket('');
       setRenameName('');
