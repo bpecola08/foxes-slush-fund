@@ -12,6 +12,7 @@
 //   rebuildDecks: {} -> { firstGoal: {before, after}, firstPenalty: {...}, playmaker: {...} }   (one-time fix: rebuild the open game's decks from the starting goalie, keeping drawn cards out)
 //   setStartingGoalie: { startingGoalie } -> { startingGoalie, decks, conflicts }   (fix a wrong goalie pick on an open game; decks rebuild, sold plays stay)
 //   transferPick: { fromTicketId, toTicketId, category } -> { category, player, fromBettor, toBettor, removedPlay }   (move one category's pick to another play — entered under the wrong person; a source play left empty is removed)
+//   renameBettor: { ticketId, name } -> { ticketId, oldName, newName, familyId }   (put a clear name on a play entered under a vague one, e.g. "Grandparents")
 //   resetGame:    {} -> { logged }   (saves the finished game to the Game Log, then clears back to setup; merged in from the old resetGame function)
 //   payAmanda:    {} -> { paidCents, paidAt }   (records the slush as sent to Amanda and zeroes the amount owed; merged in from the old payAmanda function)
 //   factoryReset: {} -> {}   (wipes plays, pots, wallets, slush and the Game Log; the organizer password survives; merged in from the old factoryReset function)
@@ -106,6 +107,16 @@ module.exports = handler(async (body) => {
         fromTicketId: body.fromTicketId,
         toTicketId: body.toTicketId,
         category: body.category,
+      });
+      return { result: r };
+    });
+    return { ...out };
+  }
+  if (action === 'renameBettor') {
+    const out = await db.withState((state) => {
+      const r = logic.renameBettor(state, {
+        ticketId: body.ticketId,
+        name: body.name,
       });
       return { result: r };
     });

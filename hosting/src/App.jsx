@@ -543,6 +543,9 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
   const [fixTo, setFixTo] = useState('');
   const [fixCat, setFixCat] = useState('');
   const [fixArm, setFixArm] = useState(false);
+  const [renameTicket, setRenameTicket] = useState('');
+  const [renameName, setRenameName] = useState('');
+  const [renameArm, setRenameArm] = useState(false);
   const [voidArm, setVoidArm] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
   const [potInputs, setPotInputs] = useState({ firstGoal: '', firstPenalty: '', playmaker: '' });
@@ -831,6 +834,48 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
       <p>
         <button className="ghost" onClick={movePick} disabled={busy || !fixCatObj}>
           {fixArm ? 'Tap again to confirm the move' : 'Move pick'}
+        </button>
+      </p>
+    </div>
+  ) : null;
+
+  // Shared by the open and closed cards: rename the bettor on a play —
+  // the fix when a play was entered under a vague name like
+  // "Grandparents" and nobody can tell whose play (or win) it is.
+  const renameT = fixTickets.find((t) => t.id === renameTicket) || null;
+  const doRename = async () => {
+    if (!renameT || !renameName.trim()) return;
+    if (!renameArm) {
+      setRenameArm(true);
+      flash(`Check, then tap again to confirm: "${renameT.bettor || renameT.buyer}" (${renameT.familyLabel || renameT.family}) becomes "${renameName.trim()}".`);
+      return;
+    }
+    await run(async () => {
+      const out = await api.renameBettor(renameT.id, renameName.trim());
+      setRenameArm(false);
+      setRenameTicket('');
+      setRenameName('');
+      flash(`Renamed: that play now shows as ${out.newName} (${renameT.familyLabel || renameT.family}).`);
+    });
+  };
+  const renameBlock = game && (game.phase === 'open' || game.phase === 'closed') && fixTickets.length >= 1 ? (
+    <div>
+      <h3>Fix a play — rename the bettor</h3>
+      <p className="muted small">A play entered under a vague name (like just &ldquo;Grandparents&rdquo;)? Put a clear name on it here — picks and money don&apos;t change, just the name everyone sees.</p>
+      <label>Play
+        <select value={renameTicket} onChange={(e) => { setRenameTicket(e.target.value); setRenameArm(false); }}>
+          <option value="">Pick a play…</option>
+          {fixTickets.map((t) => (
+            <option key={t.id} value={t.id}>{t.bettor || t.buyer} ({t.familyLabel || t.family})</option>
+          ))}
+        </select>
+      </label>
+      <label>New name
+        <input type="text" value={renameName} onChange={(e) => { setRenameName(e.target.value); setRenameArm(false); }} placeholder="e.g. Ifft Grandparents" maxLength={40} />
+      </label>
+      <p>
+        <button className="ghost" onClick={doRename} disabled={busy || !renameT || !renameName.trim()}>
+          {renameArm ? 'Tap again to confirm the rename' : 'Rename bettor'}
         </button>
       </p>
     </div>
@@ -1201,6 +1246,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
           <button onClick={saveDetails} disabled={busy}>Save Game Details</button>
           {goalieFixBlock}
           {fixPlayBlock}
+          {renameBlock}
           <div>
             <h3>Enter a play for a parent</h3>
             <p className="muted small">A parent handed you their picks, or texted them? Enter the play for them right here — no logging into the Parent Portal as their family.</p>
@@ -1311,6 +1357,7 @@ function OrganizerPage({ game, wallets, log, flash, fail }) {
               <p className="muted small">Draft closed ✓ — no more plays can be bought. Enter the results below once the game ends. Closed it early by mistake? <button className="ghost" onClick={reopenDraft} disabled={busy}>Reopen draft</button></p>
               {goalieFixBlock}
               {fixPlayBlock}
+              {renameBlock}
             </div>
           )}
           <h3>Results — who did it?</h3>

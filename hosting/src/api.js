@@ -72,6 +72,8 @@ export const api = {
     post('game', withPassword({ action: 'setStartingGoalie', startingGoalie })),
   transferPick: (fromTicketId, toTicketId, category) =>
     post('game', withPassword({ action: 'transferPick', fromTicketId, toTicketId, category })),
+  renameBettor: (ticketId, name) =>
+    post('game', withPassword({ action: 'renameBettor', ticketId, name })),
   resolveCategory: (category, playerNumber) =>
     post('resolve', withPassword({ action: 'resolve', category, playerNumber })),
   rollCategory: (category) =>

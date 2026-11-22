@@ -7,7 +7,7 @@ const logic = require('../lib/logic');
 const { hashPassword, verifyPassword } = require('../lib/auth');
 
 const { createInitialState, deposit, buyTicket, resolveCategory, rollCategory, unrollCategory, setPayout,
-  resetGame, voidGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setStartingGoalie, transferPick, setCarryover, setGameInfo, payAmanda, setDrawMode, setGamesLeft, setScratched, buildBackup, applyBackup, validateImportEntries, correctSlush, logFixDelta, computeLogWinner, setWalletBalances } = logic;
+  resetGame, voidGame, factoryReset, openGame, closeDraft, reopenDraft, rebuildDecks, setStartingGoalie, transferPick, renameBettor, setCarryover, setGameInfo, payAmanda, setDrawMode, setGamesLeft, setScratched, buildBackup, applyBackup, validateImportEntries, correctSlush, logFixDelta, computeLogWinner, setWalletBalances } = logic;
 
 // Deterministic RNG (LCG) so shuffles are reproducible in tests.
 function seededRng(seed = 42) {
@@ -369,6 +369,35 @@ test('transferPick across families moves the $2 between wallets; bad moves throw
   resolveCategory(state, 'firstGoal', 88);
   const c = buyTicket(state, { familyId: '22', buyer: 'Brandon', bettor: 'Brandon', mode: 'physical', picks: { firstGoal: null, firstPenalty: 19, playmaker: null } });
   assert.throws(() => transferPick(state, { fromTicketId: b.id, toTicketId: c.id, category: 'firstGoal' }), /already resolved/);
+});
+
+test('renameBettor puts a clear name on a play; picks, pots and wallets do not move', () => {
+  const state = createInitialState();
+  openGame(state, { gameDate: '2026-11-22', opponent: 'Armstrong', startingGoalie: 88, rng: seededRng(3) });
+  const gp = buyTicket(state, { familyId: '88', buyer: 'Grandparents', bettor: 'Grandparents', mode: 'physical', paidCash: true, picks: { firstGoal: null, firstPenalty: 94, playmaker: null } });
+  const potsBefore = JSON.parse(JSON.stringify(state.game.pots));
+
+  const out = renameBettor(state, { ticketId: gp.id, name: '  Ifft   Grandparents ' });
+  assert.equal(out.oldName, 'Grandparents');
+  assert.equal(out.newName, 'Ifft Grandparents'); // trimmed, single-spaced
+  const t = state.tickets.find((x) => x.id === gp.id);
+  assert.equal(t.bettor, 'Ifft Grandparents');
+  assert.equal(t.buyer, 'Ifft Grandparents');
+  assert.equal(t.picks.firstPenalty.number, 94);
+  assert.equal(t.paidCents, 200);
+  assert.deepEqual(state.game.pots, potsBefore);
+
+  // Bad renames throw: empty, too long, a name another bettor in the
+  // same family already plays under, and no open game.
+  assert.throws(() => renameBettor(state, { ticketId: gp.id, name: '   ' }), /Type the new name/);
+  assert.throws(() => renameBettor(state, { ticketId: gp.id, name: 'x'.repeat(41) }), /too long/);
+  const ben = buyTicket(state, { familyId: '88', buyer: 'Ben', bettor: 'Ben', mode: 'physical', paidCash: true, picks: { firstGoal: 9, firstPenalty: null, playmaker: null } });
+  assert.throws(() => renameBettor(state, { ticketId: ben.id, name: 'Ifft Grandparents' }), /already has a play/);
+  // The same name under a DIFFERENT family is fine.
+  const other = buyTicket(state, { familyId: '22', buyer: 'Grandparents', bettor: 'Grandparents', mode: 'physical', paidCash: true, picks: { firstGoal: 19, firstPenalty: null, playmaker: null } });
+  assert.equal(renameBettor(state, { ticketId: other.id, name: 'Pecola Grandparents' }).newName, 'Pecola Grandparents');
+  const fresh = createInitialState();
+  assert.throws(() => renameBettor(fresh, { ticketId: gp.id, name: 'X' }), /No game is open/);
 });
 
 test('Play now pay later: a ticket goes through on a short wallet and the balance goes negative; the ticket is marked payLater', () => {
